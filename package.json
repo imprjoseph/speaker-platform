@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "login": "clasp login",
-    "create": "clasp create --type webapp --title \"Speaker Platform\" --rootDir src",
+    "create": "clasp create --type sheets --title \"講者協作與會務追蹤平台\" --rootDir src",
     "push": "clasp push",
     "watch": "clasp push --watch",
     "open": "clasp open",
