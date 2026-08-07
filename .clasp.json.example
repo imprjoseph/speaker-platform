@@ -1,0 +1,4 @@
+{
+  "scriptId": "在此貼上你的 Apps Script 專案 ID（執行 clasp create 或 clasp clone 後自動產生）",
+  "rootDir": "src"
+}
