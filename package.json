@@ -6,8 +6,8 @@
   "scripts": {
     "login": "clasp login",
     "create": "clasp create --type sheets --title \"講者協作與會務追蹤平台\" --rootDir src",
-    "push": "clasp push",
-    "watch": "clasp push --watch",
+    "push": "clasp push --force",
+    "watch": "clasp push --force --watch",
     "open": "clasp open",
     "deploy": "clasp deploy",
     "logs": "clasp logs"
