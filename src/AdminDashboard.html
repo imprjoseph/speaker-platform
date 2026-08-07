@@ -45,7 +45,7 @@
           <input id="a_nameZh" placeholder="活動名稱（中）">
           <input id="a_startDate" type="date">
           <input id="a_venue" placeholder="會場">
-          <button class="action" onclick="createActivity()">建立</button>
+          <button class="action" onclick="createActivity(this)">建立</button>
         </div>
       </div>
       <div class="card">
@@ -58,8 +58,8 @@
       <div class="card">
         <div class="row-form">
           <select id="boardActivitySelect" onchange="loadBoard()"></select>
-          <button class="action secondary" onclick="exportRoster()">匯出講者總表</button>
-          <button class="action secondary" onclick="exportMissing()">匯出缺件表</button>
+          <button class="action secondary" onclick="exportRoster(this)">匯出講者總表</button>
+          <button class="action secondary" onclick="exportMissing(this)">匯出缺件表</button>
         </div>
         <div class="grid" id="dashboardStats"></div>
       </div>
@@ -70,7 +70,7 @@
           <input id="s_email" placeholder="Email">
           <input id="s_title" placeholder="職稱">
           <input id="s_org" placeholder="單位">
-          <button class="action" onclick="addSpeaker()">加入並產生邀請連結</button>
+          <button class="action" onclick="addSpeaker(this)">加入並產生邀請連結</button>
         </div>
       </div>
       <div class="card">
@@ -89,6 +89,19 @@
 
   <script>
     var currentActivityId = null;
+
+    /**
+     * 防止重複送出：呼叫期間鎖住按鈕並顯示「處理中…」，避免使用者以為畫面卡住而連續點擊
+     * 造成重複建立資料（例如連點「建立」會建出多筆重複活動）。
+     */
+    function withBusy(btn, task) {
+      if (!btn || btn.disabled) return;
+      var orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '處理中…';
+      function done() { btn.disabled = false; btn.textContent = orig; }
+      task(done);
+    }
 
     function showTab(name) {
       ['activities', 'board', 'mail'].forEach(function (t) {
@@ -121,14 +134,19 @@
       }).api_listActivities();
     }
 
-    function createActivity() {
+    function createActivity(btn) {
       var input = {
         nameZh: document.getElementById('a_nameZh').value,
         startDate: document.getElementById('a_startDate').value,
         venue: document.getElementById('a_venue').value
       };
       if (!input.nameZh || !input.startDate) { alert('請填寫活動名稱與日期'); return; }
-      google.script.run.withSuccessHandler(loadActivities).withFailureHandler(alertErr).api_createActivity(input);
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function (r) { done(); loadActivities(); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_createActivity(input);
+      });
     }
 
     function openBoard(activityId) {
@@ -161,28 +179,33 @@
         tbody.innerHTML += '<tr><td>' + b.speakerName + '</td><td>' + b.inviteStatus + '</td>' +
           '<td>' + (b.missingCount ? '<span class="pill warn">' + b.missingCount + '</span>' : '<span class="pill">0</span>') + '</td>' +
           '<td style="font-size:12px">' + itemsText + '</td>' +
-          '<td><button class="action secondary" onclick="composeInvite(\'' + b.activitySpeakerId + '\')">排入邀請信</button></td></tr>';
+          '<td><button class="action secondary" onclick="composeInvite(this, \'' + b.activitySpeakerId + '\')">排入邀請信</button></td></tr>';
       });
     }
 
-    function addSpeaker() {
+    function addSpeaker(btn) {
       if (!currentActivityId) { alert('請先選擇活動'); return; }
       var speakerInput = {
         nameZh: document.getElementById('s_nameZh').value, email: document.getElementById('s_email').value,
         title: document.getElementById('s_title').value, organization: document.getElementById('s_org').value
       };
       if (!speakerInput.nameZh) { alert('請輸入姓名'); return; }
-      google.script.run.withSuccessHandler(function (res) {
-        if (res.duplicateWarning) alert(res.duplicateWarning);
-        loadBoard();
-      }).withFailureHandler(alertErr).api_addSpeaker(currentActivityId, speakerInput, {});
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function (res) { done(); if (res.duplicateWarning) alert(res.duplicateWarning); loadBoard(); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_addSpeaker(currentActivityId, speakerInput, {});
+      });
     }
 
-    function composeInvite(activitySpeakerId) {
+    function composeInvite(btn, activitySpeakerId) {
       var lang = confirm('英文範本請按「確定」，中文請按「取消」') ? 'TPL_INVITE_EN' : 'TPL_INVITE_ZH';
-      google.script.run.withSuccessHandler(function () {
-        alert('已排入待審佇列，請至「郵件待審」分頁確認寄出。');
-      }).withFailureHandler(alertErr).api_composeInviteMail(activitySpeakerId, lang);
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function () { done(); alert('已排入待審佇列，請至「郵件待審」分頁確認寄出。'); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_composeInviteMail(activitySpeakerId, lang);
+      });
     }
 
     function loadMailQueue() {
@@ -195,34 +218,59 @@
       rows.forEach(function (m) {
         var actions = '';
         if (m.Status === '待確認') {
-          actions = '<button class="action" onclick="approveMail(\'' + m.QueueId + '\')">確認寄出</button>' +
-            '<button class="action reject" onclick="rejectMail(\'' + m.QueueId + '\')">拒絕</button>' +
-            '<button class="action secondary" onclick="testSend(\'' + m.QueueId + '\')">寄測試信</button>';
+          actions = '<button class="action" onclick="approveMail(this, \'' + m.QueueId + '\')">確認寄出</button>' +
+            '<button class="action reject" onclick="rejectMail(this, \'' + m.QueueId + '\')">拒絕</button>' +
+            '<button class="action secondary" onclick="testSend(this, \'' + m.QueueId + '\')">寄測試信</button>';
         }
         tbody.innerHTML += '<tr><td>' + m.ToEmail + '</td><td>' + m.RenderedSubject + '</td><td>' + m.Language + '</td>' +
           '<td><span class="pill">' + m.Status + '</span></td><td>' + actions + '</td></tr>';
       });
     }
 
-    function approveMail(id) {
+    function approveMail(btn, id) {
       if (!confirm('確認要立即寄出這封信嗎？')) return;
-      google.script.run.withSuccessHandler(loadMailQueue).withFailureHandler(alertErr).api_approveMail(id);
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function () { done(); loadMailQueue(); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_approveMail(id);
+      });
     }
-    function rejectMail(id) {
+    function rejectMail(btn, id) {
       var reason = prompt('拒絕原因（選填）：') || '';
-      google.script.run.withSuccessHandler(loadMailQueue).withFailureHandler(alertErr).api_rejectMail(id, reason);
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function () { done(); loadMailQueue(); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_rejectMail(id, reason);
+      });
     }
-    function testSend(id) {
+    function testSend(btn, id) {
       var email = prompt('測試信收件人 Email：', document.getElementById('whoami').textContent);
       if (!email) return;
-      google.script.run.withSuccessHandler(function () { alert('測試信已寄出'); }).withFailureHandler(alertErr).api_testSendMail(id, email);
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function () { done(); alert('測試信已寄出'); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_testSendMail(id, email);
+      });
     }
 
-    function exportRoster() {
-      google.script.run.withSuccessHandler(function (r) { window.open(r.url, '_blank'); }).api_exportRoster(currentActivityId);
+    function exportRoster(btn) {
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function (r) { done(); window.open(r.url, '_blank'); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_exportRoster(currentActivityId);
+      });
     }
-    function exportMissing() {
-      google.script.run.withSuccessHandler(function (r) { window.open(r.url, '_blank'); }).api_exportMissing(currentActivityId);
+    function exportMissing(btn) {
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function (r) { done(); window.open(r.url, '_blank'); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_exportMissing(currentActivityId);
+      });
     }
 
     function alertErr(err) { alert('發生錯誤：' + err.message); }
