@@ -112,6 +112,7 @@ var API_WHITELIST_ = {
  */
 function handleApiCall_(e) {
   var action = '(unknown)';
+  var callback = e && e.parameter && e.parameter.callback;
   try {
     var payload = parseApiPayload_(e);
     action = (e.parameter && e.parameter.api) || payload.action;
@@ -122,10 +123,10 @@ function handleApiCall_(e) {
     setCallerEmailOverride_(payload.callerEmail || null);
     var result = fn.apply(null, args);
     setCallerEmailOverride_(null);
-    return jsonOutput_({ ok: true, result: result });
+    return jsonOutput_({ ok: true, result: result }, callback);
   } catch (err) {
     setCallerEmailOverride_(null);
-    return jsonOutput_({ ok: false, action: action, error: err.message });
+    return jsonOutput_({ ok: false, action: action, error: err.message }, callback);
   }
 }
 
@@ -135,6 +136,16 @@ function parseApiPayload_(e) {
   return {};
 }
 
-function jsonOutput_(obj) {
+/**
+ * callback 有帶的話，輸出成 JSONP（`callbackName(...)` 這種可執行的 JS），供前端用
+ * <script src="..."> 動態載入呼叫——這個做法完全不受瀏覽器跨網域限制（CORS）管轄，
+ * 因為載入 <script> 本來就不算「跨網域請求」。見 AdminDashboard.html / SpeakerForm.html
+ * 的 callApi_()。沒帶 callback 時退回原本單純的 JSON 輸出，供其他直接呼叫方式使用。
+ */
+function jsonOutput_(obj, callback) {
+  if (callback) {
+    return ContentService.createTextOutput(callback + '(' + JSON.stringify(obj) + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }

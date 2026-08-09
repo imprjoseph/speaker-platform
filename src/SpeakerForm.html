@@ -79,19 +79,39 @@
       }
     };
 
+    /**
+     * 用 JSONP（動態載入 <script src="..."> 標籤）呼叫 API，而不是 fetch()。
+     * 實測 fetch() 在這個部署上會被瀏覽器跨網域限制擋下（"Failed to fetch"），但直接在網址列
+     * 打開同一個網址能看到正確結果，證明是 fetch 這種「程式化」跨網域請求特有的限制。
+     * <script> 標籤載入不受這個限制管轄，講者是外部使用者，更不能冒這個風險。
+     * 已知限制：檔案上傳(submitFileUpload)的 base64 內容如果太大，網址會超長而失敗；
+     * 目前先用於一般大小的 CV/照片，如果實測常常失敗，需要改成分段上傳。
+     */
+    var jsonpCounter_ = 0;
     function callApi_(action, args) {
-      // 實測這個部署對 POST 請求會回 401，GET 完全正常，所以一律用 GET，
-      // 把呼叫內容包成 JSON 字串放進 ?payload= 參數。
-      // 已知限制：檔案上傳(submitFileUpload)的 base64 內容如果太大，網址會超長而失敗；
-      // 目前先用於一般大小的 CV/照片，如果實測常常失敗，需要改成分段上傳。
-      var payload = JSON.stringify({ args: args, callerEmail: null });
-      var url = SCRIPT_URL + '?api=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(payload) + '&_=' + Date.now();
-      return fetch(url, { method: 'GET', cache: 'no-store' }).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + '：' + res.statusText);
-        return res.json();
-      }).then(function (json) {
-        if (!json.ok) throw new Error(json.error || '未知錯誤');
-        return json.result;
+      return new Promise(function (resolve, reject) {
+        var cbName = '__cb_' + (jsonpCounter_++) + '_' + Date.now();
+        var payload = JSON.stringify({ args: args, callerEmail: null });
+        var url = SCRIPT_URL + '?api=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(payload) + '&callback=' + cbName;
+
+        var script = document.createElement('script');
+        var timeoutId = setTimeout(function () { cleanup(); reject(new Error('請求逾時（30 秒），請檢查網路連線')); }, 30000);
+
+        function cleanup() {
+          clearTimeout(timeoutId);
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+
+        window[cbName] = function (json) {
+          cleanup();
+          if (!json.ok) reject(new Error(json.error || '未知錯誤'));
+          else resolve(json.result);
+        };
+        script.onerror = function () { cleanup(); reject(new Error('無法載入 API（網路異常或部署設定問題）')); };
+
+        script.src = url;
+        document.head.appendChild(script);
       });
     }
 

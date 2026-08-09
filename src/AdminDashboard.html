@@ -186,17 +186,38 @@
       }
     };
 
+    /**
+     * 用 JSONP（動態載入 <script src="..."> 標籤）呼叫 API，而不是 fetch()。
+     * 實測 fetch() 在這個部署上會被瀏覽器的跨網域限制擋下（"Failed to fetch"，即使伺服器端
+     * 其實有正常處理——直接在網址列打開同一個網址能看到正確結果，證明問題出在 fetch 這種
+     * 「程式化」跨網域請求的限制，不是伺服器邏輯）。<script> 標籤載入不受這個限制管轄，
+     * 是繞開這類環境問題最可靠的做法。
+     */
+    var jsonpCounter_ = 0;
     function callApi_(action, args) {
-      // 實測這個部署對 POST 請求會回 401，GET 請求完全正常，所以一律用 GET，
-      // 把呼叫內容包成 JSON 字串放進 ?payload= 參數（見 Code.js 的 parseApiPayload_）。
-      var payload = JSON.stringify({ args: args, callerEmail: CALLER_EMAIL });
-      var url = SCRIPT_URL + '?api=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(payload) + '&_=' + Date.now();
-      return fetch(url, { method: 'GET', cache: 'no-store' }).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + '：' + res.statusText);
-        return res.json();
-      }).then(function (json) {
-        if (!json.ok) throw new Error(json.error || ('未知錯誤（' + json.action + '）'));
-        return json.result;
+      return new Promise(function (resolve, reject) {
+        var cbName = '__cb_' + (jsonpCounter_++) + '_' + Date.now();
+        var payload = JSON.stringify({ args: args, callerEmail: CALLER_EMAIL });
+        var url = SCRIPT_URL + '?api=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(payload) + '&callback=' + cbName;
+
+        var script = document.createElement('script');
+        var timeoutId = setTimeout(function () { cleanup(); reject(new Error('請求逾時（30 秒），請檢查網路連線')); }, 30000);
+
+        function cleanup() {
+          clearTimeout(timeoutId);
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+
+        window[cbName] = function (json) {
+          cleanup();
+          if (!json.ok) reject(new Error(json.error || ('未知錯誤（' + json.action + '）')));
+          else resolve(json.result);
+        };
+        script.onerror = function () { cleanup(); reject(new Error('無法載入 API（網路異常或部署設定問題）')); };
+
+        script.src = url;
+        document.head.appendChild(script);
       });
     }
 

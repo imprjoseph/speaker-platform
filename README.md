@@ -83,7 +83,11 @@ Apps Script 網頁應用程式內建的 `google.script.run` 橋接層，每次�
 
 **代價**：因為 fetch() 呼叫不會帶 Google 登入 Cookie，伺服器端沒辦法再用 `Session.getActiveUser()` 可靠地判斷是誰在呼叫，改成前端在頁面載入當下（這是唯一 Session 保證可靠的地方）把驗證過的 Email 記下來，之後每次 API 呼叫原樣傳回去，伺服器直接信任這個值做角色比對。詳見上方「已知限制」。
 
-**補充（實測踩坑）**：一開始 `callApi_` 是用 `fetch(..., { method: 'POST' })`，結果這個部署對 POST 請求一律回 `HTTP 401`，但對 GET 完全正常（用瀏覽器直接開 `?api=currentUser` 這種網址可以拿到正確 JSON）。原因未完全確定，但既然 GET 穩定可用，前端全部改成 GET，把呼叫內容序列化成 JSON 字串放進 `?payload=` 參數（見 `Code.js` 的 `parseApiPayload_`）。**已知限制**：`submitFileUpload` 的 base64 檔案內容如果太大，會讓網址超過瀏覽器／伺服器可接受的長度而失敗；目前只驗證過一般大小的 CV／照片，如果之後常常上傳失敗，需要改成分段上傳（chunked upload）。
+**補充（實測踩坑，兩輪）**：
+1. 一開始 `callApi_` 用 `fetch(..., { method: 'POST' })`，這個部署對 POST 一律回 `HTTP 401`，GET 卻完全正常（瀏覽器網址列直接開 `?api=currentUser` 能拿到正確 JSON），所以先全部改成 GET。
+2. 改成 GET 後用 `fetch()` 呼叫，主控台卻出現 `Failed to fetch`——瀏覽器網址列直接開同一個網址明明正常，證明伺服器端邏輯沒問題，卡住的是 fetch() 這種「程式化」跨網域請求特有的瀏覽器限制（直接網址列輸入的頂層導覽不受這個限制管轄）。最終改成 **JSONP**（動態插入 `<script src="...">` 標籤，讓伺服器回傳可執行的 `callbackName(...)` 而非純 JSON，見 `Code.js` 的 `jsonOutput_`）——`<script>` 標籤載入完全不受瀏覽器跨網域限制管轄，是這幾輪嘗試中最穩定可靠的做法。
+
+**已知限制**：JSONP 一樣是用網址參數傳資料，`submitFileUpload` 的 base64 檔案內容如果太大，會讓網址超過瀏覽器／伺服器可接受的長度而失敗；目前只驗證過一般大小的 CV／照片，如果之後常常上傳失敗，需要改成分段上傳（chunked upload）。
 
 ## 郵件寄送與「窗口確認」機制
 
