@@ -138,7 +138,7 @@ function sendQueueItem_(queueId, actorEmail) {
     replyTo: queued.ReplyTo || undefined,
     subject: queued.RenderedSubject,
     htmlBody: queued.RenderedBody,
-    name: PropertiesService.getScriptProperties().getProperty(PROP_KEYS.FROM_NAME) || '講者協作平台'
+    name: buildSenderName_(queued.ActivityId)
   });
 
   var updated = updateRowByKey_(SHEETS.MAIL_QUEUE, 'QueueId', queueId, { Status: STATUS.MAIL.SENT, SentAt: nowIso_() });
@@ -152,9 +152,16 @@ function testSendMail(queueId, testRecipientEmail, actorEmail) {
   MailApp.sendEmail({
     to: testRecipientEmail,
     subject: '[測試信] ' + queued.RenderedSubject,
-    htmlBody: '<p style="color:#c00">這是測試信，不會計入正式寄送紀錄。</p>' + queued.RenderedBody
+    htmlBody: '<p style="color:#c00">這是測試信，不會計入正式寄送紀錄。</p>' + queued.RenderedBody,
+    name: buildSenderName_(queued.ActivityId)
   });
   writeAudit_(actorEmail, 'TEST_SEND_MAIL', SHEETS.MAIL_QUEUE, queueId, testRecipientEmail);
+}
+
+/** 寄件者顯示名稱＝活動名稱＋「執行團隊」，讓講者一看就知道是哪場活動的通知。 */
+function buildSenderName_(activityId) {
+  var activity = activityId ? findOneBy_(SHEETS.ACTIVITIES, 'ActivityId', activityId) : null;
+  return activity ? (activity.NameZh + ' 執行團隊') : COMPANY_NAME;
 }
 
 /** 講者婉拒、或某項資料完成後，取消尚未寄出的催收信（規劃書關鍵決策 4）。 */
