@@ -161,6 +161,22 @@
       task(done);
     }
 
+    /**
+     * Apps Script 的 google.script.run 橋接層會把成功回呼裡拋出的例外吞掉，只在主控台留下
+     * 看不懂的內部訊息（"Uncaught Gr"）。這裡先攔截、用 alert 印出真正的錯誤訊息與行號，
+     * 方便直接回報，不用再去猜是哪一行炸的。
+     */
+    function wrap(fn) {
+      return function () {
+        try {
+          return fn.apply(this, arguments);
+        } catch (e) {
+          alert('前端程式錯誤（麻煩把這整段訊息回報）：\n' + (e && e.stack ? e.stack : e));
+          console.error(e);
+        }
+      };
+    }
+
     function showTab(name) {
       ['activities', 'board', 'mail', 'accounts'].forEach(function (t) {
         document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
@@ -174,11 +190,11 @@
     function alertErr(err) { alert('發生錯誤：' + err.message); }
 
     function init() {
-      google.script.run.withSuccessHandler(function (u) {
+      google.script.run.withSuccessHandler(wrap(function (u) {
         document.getElementById('whoami').textContent = u.name + (u.role ? '（' + u.role + '）' : '（尚未授權，僅能瀏覽）');
         document.getElementById('companyLine').textContent = u.companyName;
-      }).api_currentUser();
-      google.script.run.withSuccessHandler(function (fields) { standardFields = fields; renderStandardFieldsChecklist(); }).api_listStandardFields();
+      })).api_currentUser();
+      google.script.run.withSuccessHandler(wrap(function (fields) { standardFields = fields; renderStandardFieldsChecklist(); })).api_listStandardFields();
       loadActivities();
     }
 
@@ -189,7 +205,7 @@
       statusEl.textContent = '載入中…';
       google.script.run
         .withFailureHandler(function (err) { statusEl.textContent = '載入失敗：' + err.message; alertErr(err); })
-        .withSuccessHandler(function (list) {
+        .withSuccessHandler(wrap(function (list) {
         statusEl.textContent = '已載入 ' + list.length + ' 筆活動（' + new Date().toLocaleTimeString('zh-TW') + '）';
         var tbody = document.querySelector('#activityTable tbody');
         tbody.innerHTML = '';
@@ -206,7 +222,7 @@
           select.innerHTML += '<option value="' + a.ActivityId + '">' + a.NameZh + '</option>';
         });
         if (list.length) { currentActivityId = list[0].ActivityId; loadBoard(); }
-      }).api_listActivities();
+      })).api_listActivities();
     }
 
     function esc_(s) { return String(s || '').replace(/'/g, "\\'"); }
@@ -221,10 +237,10 @@
 
       withBusy(btn, function (done) {
         var call = editingActivityId
-          ? google.script.run.withSuccessHandler(function () { done(); cancelEditActivity(); loadActivities(); })
+          ? google.script.run.withSuccessHandler(wrap(function () { done(); cancelEditActivity(); loadActivities(); }))
               .withFailureHandler(function (err) { done(); alertErr(err); })
               .api_updateActivity(editingActivityId, { NameZh: input.nameZh, StartDate: input.startDate, Venue: input.venue })
-          : google.script.run.withSuccessHandler(function () { done(); loadActivities(); clearActivityForm_(); })
+          : google.script.run.withSuccessHandler(wrap(function () { done(); loadActivities(); clearActivityForm_(); }))
               .withFailureHandler(function (err) { done(); alertErr(err); })
               .api_createActivity(input);
       });
@@ -257,13 +273,13 @@
 
     function archiveActivityAction(activityId) {
       if (!confirm('封存後活動會從進行中列表隱藏，但資料都會保留，之後仍可查詢。確定封存？')) return;
-      google.script.run.withSuccessHandler(loadActivities).withFailureHandler(alertErr).api_archiveActivity(activityId);
+      google.script.run.withSuccessHandler(wrap(loadActivities)).withFailureHandler(alertErr).api_archiveActivity(activityId);
     }
 
     function deleteActivityAction(activityId) {
       if (!confirm('這會永久刪除這場活動與底下所有講者、資料、郵件紀錄，且無法復原！確定要刪除嗎？')) return;
       if (!confirm('再次確認：真的要永久刪除嗎？此動作無法復原。')) return;
-      google.script.run.withSuccessHandler(loadActivities).withFailureHandler(alertErr).api_deleteActivity(activityId);
+      google.script.run.withSuccessHandler(wrap(loadActivities)).withFailureHandler(alertErr).api_deleteActivity(activityId);
     }
 
     function openBoard(activityId) {
@@ -277,8 +293,8 @@
     function loadBoard() {
       currentActivityId = document.getElementById('boardActivitySelect').value || currentActivityId;
       if (!currentActivityId) return;
-      google.script.run.withSuccessHandler(renderDashboard).api_getDashboard(currentActivityId);
-      google.script.run.withSuccessHandler(renderBoard).api_getTaskBoard(currentActivityId);
+      google.script.run.withFailureHandler(alertErr).withSuccessHandler(wrap(renderDashboard)).api_getDashboard(currentActivityId);
+      google.script.run.withFailureHandler(alertErr).withSuccessHandler(wrap(renderBoard)).api_getTaskBoard(currentActivityId);
       loadDataRequirements();
     }
 
@@ -316,14 +332,14 @@
 
     function loadDataRequirements() {
       if (!currentActivityId) return;
-      google.script.run.withSuccessHandler(function (reqs) {
+      google.script.run.withFailureHandler(alertErr).withSuccessHandler(wrap(function (reqs) {
         var box = document.getElementById('currentRequirementsList');
         box.textContent = reqs.length ? ('已設定：' + reqs.map(function (r) { return r.LabelZh; }).join('、')) : '這場活動尚未設定任何資料需求。';
         standardFields.forEach(function (f) {
           var el = document.getElementById('std_' + f.fieldKey);
           if (el) el.checked = reqs.some(function (r) { return r.FieldKey === f.fieldKey; });
         });
-      }).api_listDataRequirements(currentActivityId);
+      })).api_listDataRequirements(currentActivityId);
     }
 
     function applyStandardFields(btn) {
@@ -333,7 +349,7 @@
       if (!checked.length) { alert('請至少勾選一項'); return; }
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function () { done(); loadDataRequirements(); loadBoard(); })
+          .withSuccessHandler(wrap(function () { done(); loadDataRequirements(); loadBoard(); }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_addStandardFields(currentActivityId, checked);
       });
@@ -353,7 +369,7 @@
       withBusy(btn, function (done) {
         if (editingSpeakerId) {
           google.script.run
-            .withSuccessHandler(function () { done(); cancelEditSpeaker(); loadBoard(); })
+            .withSuccessHandler(wrap(function () { done(); cancelEditSpeaker(); loadBoard(); }))
             .withFailureHandler(function (err) { done(); alertErr(err); })
             .api_updateSpeaker(editingSpeakerId, {
               NameZh: speakerInput.nameZh, Email: speakerInput.email, Title: speakerInput.title,
@@ -361,7 +377,7 @@
             });
         } else {
           google.script.run
-            .withSuccessHandler(function (res) { done(); if (res.duplicateWarning) alert(res.duplicateWarning); clearSpeakerForm_(); loadBoard(); })
+            .withSuccessHandler(wrap(function (res) { done(); if (res.duplicateWarning) alert(res.duplicateWarning); clearSpeakerForm_(); loadBoard(); }))
             .withFailureHandler(function (err) { done(); alertErr(err); })
             .api_addSpeaker(currentActivityId, speakerInput, {});
         }
@@ -377,7 +393,7 @@
     }
 
     function startEditSpeaker(activitySpeakerId) {
-      google.script.run.withSuccessHandler(function (detail) {
+      google.script.run.withSuccessHandler(wrap(function (detail) {
         editingSpeakerId = detail.speaker.SpeakerId;
         document.getElementById('s_nameZh').value = detail.speaker.NameZh;
         document.getElementById('s_email').value = detail.speaker.Email;
@@ -388,7 +404,7 @@
         document.getElementById('speakerSubmitBtn').textContent = '更新講者';
         document.getElementById('speakerEditingFlag').style.display = 'block';
         window.scrollTo(0, document.getElementById('speakerFormTitle').offsetTop);
-      }).withFailureHandler(alertErr).api_getSpeakerDetail(activitySpeakerId);
+      })).withFailureHandler(alertErr).api_getSpeakerDetail(activitySpeakerId);
     }
 
     function cancelEditSpeaker() {
@@ -401,13 +417,13 @@
 
     function removeSpeaker(activitySpeakerId) {
       if (!confirm('把這位講者從此活動移除？（不會刪除講者主檔，其他活動不受影響）')) return;
-      google.script.run.withSuccessHandler(loadBoard).withFailureHandler(alertErr).api_removeSpeakerFromActivity(activitySpeakerId);
+      google.script.run.withSuccessHandler(wrap(loadBoard)).withFailureHandler(alertErr).api_removeSpeakerFromActivity(activitySpeakerId);
     }
 
     function composeInvite(btn, activitySpeakerId) {
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function () { done(); alert('已依講者語系排入待審佇列，請至「郵件待審」分頁確認寄出。'); })
+          .withSuccessHandler(wrap(function () { done(); alert('已依講者語系排入待審佇列，請至「郵件待審」分頁確認寄出。'); }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_composeInviteMail(activitySpeakerId, null);
       });
@@ -426,13 +442,13 @@
       });
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function (results) {
+          .withSuccessHandler(wrap(function (results) {
             done();
             var warnings = results.filter(function (r) { return r.duplicateWarning; }).map(function (r) { return r.duplicateWarning; });
             alert('已匯入 ' + results.length + ' 位講者。' + (warnings.length ? '\n\n' + warnings.join('\n') : ''));
             document.getElementById('importText').value = '';
             loadBoard();
-          })
+          }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_importSpeakers(currentActivityId, rows);
       });
@@ -441,7 +457,7 @@
     // ---------------- 郵件待審 ----------------
 
     function loadMailQueue() {
-      google.script.run.withSuccessHandler(renderMailQueue).api_listMailQueue(null, null);
+      google.script.run.withFailureHandler(alertErr).withSuccessHandler(wrap(renderMailQueue)).api_listMailQueue(null, null);
     }
 
     function renderMailQueue(rows) {
@@ -463,7 +479,7 @@
       if (!confirm('確認要立即寄出這封信嗎？')) return;
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function () { done(); loadMailQueue(); })
+          .withSuccessHandler(wrap(function () { done(); loadMailQueue(); }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_approveMail(id);
       });
@@ -472,7 +488,7 @@
       var reason = prompt('拒絕原因（選填）：') || '';
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function () { done(); loadMailQueue(); })
+          .withSuccessHandler(wrap(function () { done(); loadMailQueue(); }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_rejectMail(id, reason);
       });
@@ -482,7 +498,7 @@
       if (!email) return;
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function () { done(); alert('測試信已寄出'); })
+          .withSuccessHandler(wrap(function () { done(); alert('測試信已寄出'); }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_testSendMail(id, email);
       });
@@ -493,7 +509,7 @@
     function exportRoster(btn) {
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function (r) { done(); window.open(r.url, '_blank'); })
+          .withSuccessHandler(wrap(function (r) { done(); window.open(r.url, '_blank'); }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_exportRoster(currentActivityId);
       });
@@ -501,7 +517,7 @@
     function exportMissing(btn) {
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function (r) { done(); window.open(r.url, '_blank'); })
+          .withSuccessHandler(wrap(function (r) { done(); window.open(r.url, '_blank'); }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_exportMissing(currentActivityId);
       });
@@ -510,7 +526,7 @@
     // ---------------- 帳號管理 ----------------
 
     function loadUsers() {
-      google.script.run.withSuccessHandler(renderUsers).withFailureHandler(alertErr).api_listUsers();
+      google.script.run.withSuccessHandler(wrap(renderUsers)).withFailureHandler(alertErr).api_listUsers();
     }
 
     var ROLE_LABELS = {
@@ -538,22 +554,22 @@
       if (!name || !email) { alert('請填寫姓名與 Email'); return; }
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function () {
+          .withSuccessHandler(wrap(function () {
             done(); loadUsers();
             document.getElementById('u_name').value = ''; document.getElementById('u_email').value = '';
-          })
+          }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
           .api_addUser(name, email, role);
       });
     }
 
     function changeUserRole(userId, role) {
-      google.script.run.withSuccessHandler(loadUsers).withFailureHandler(alertErr).api_updateUserRole(userId, role);
+      google.script.run.withSuccessHandler(wrap(loadUsers)).withFailureHandler(alertErr).api_updateUserRole(userId, role);
     }
 
     function removeUserAction(userId) {
       if (!confirm('確定要移除這個帳號？')) return;
-      google.script.run.withSuccessHandler(loadUsers).withFailureHandler(alertErr).api_removeUser(userId);
+      google.script.run.withSuccessHandler(wrap(loadUsers)).withFailureHandler(alertErr).api_removeUser(userId);
     }
 
     init();
