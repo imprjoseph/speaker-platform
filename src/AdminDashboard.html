@@ -61,7 +61,8 @@
         </div>
       </div>
       <div class="card">
-        <h3>活動列表</h3>
+        <h3>活動列表 <button class="action secondary" style="font-size:11px" onclick="loadActivities()">重新整理列表</button></h3>
+        <p class="hint" id="activityListStatus"></p>
         <table id="activityTable"><thead><tr><th>名稱</th><th>日期</th><th>狀態</th><th></th></tr></thead><tbody></tbody></table>
       </div>
     </section>
@@ -184,7 +185,12 @@
     // ---------------- 活動 ----------------
 
     function loadActivities() {
-      google.script.run.withSuccessHandler(function (list) {
+      var statusEl = document.getElementById('activityListStatus');
+      statusEl.textContent = '載入中…';
+      google.script.run
+        .withFailureHandler(function (err) { statusEl.textContent = '載入失敗：' + err.message; alertErr(err); })
+        .withSuccessHandler(function (list) {
+        statusEl.textContent = '已載入 ' + list.length + ' 筆活動（' + new Date().toLocaleTimeString('zh-TW') + '）';
         var tbody = document.querySelector('#activityTable tbody');
         tbody.innerHTML = '';
         var select = document.getElementById('boardActivitySelect');
