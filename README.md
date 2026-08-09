@@ -25,6 +25,7 @@ Google Sheets + Google Apps Script + GitHub 版本控管。對應〈講者協作
 - **權限僅做角色欄位比對**，尚未做到「接待人員看不到 CV」等欄位級遮蔽，屬第一階段之後要補強的項目。
 - **開信追蹤（已開啟）**目前用「講者是否曾打開填寫頁」的稽核紀錄近似，不是信件像素追蹤。
 - 匯出目前產生的是 Google試算表（可再手動下載為 .xlsx），還沒有直接產出 PDF。
+- **身分驗證是前端自報、非伺服器端驗證**（見下方「為什麼不用 google.script.run」）：後台頁面載入當下會用 Google 登入狀態驗證一次身分，之後每次 API 呼叫都是前端把那個 Email 原樣傳回來，伺服器端直接信任，沒有再次加密驗證。對小型內部信任團隊使用沒有問題，但技術上有心人可以偽造別人的 Email 來呼叫 API。**在開放給不受信任的使用者、或正式對外之前，必須換成有簽章/token 的驗證機制**，不能只靠現在這種前端自報的方式。
 
 ## 技術棧
 
@@ -64,7 +65,23 @@ npm run push        # 推到 Apps Script
 git add -A && git commit -m "..."   # 本機留存版本記錄
 ```
 
-> 目前只做了本機 `git init`，**尚未建立或推送到 GitHub 遠端 repo** —— 需要你確認要用哪個 GitHub 帳號／組織建立 repository 後再執行 `git remote add` 與 `git push`。
+程式碼改完只跑 `npm run push` 不會讓已部署的網址生效——Apps Script 的部署是「版本快照」，push 只更新程式碼本體，還要跑 `npm run deploy` 才會把正式網址指到最新版本。兩件事一起做，直接跑：
+
+```bash
+npm run release      # = npm run push && npm run deploy
+```
+
+`npm run deploy` 裡已經寫死這個專案的部署 ID，跑起來不會再跳互動式確認。
+
+倉庫已推送到 [github.com/imprjoseph/speaker-platform](https://github.com/imprjoseph/speaker-platform)，`main` 分支已設定追蹤 `origin/main`，之後改完程式碼照常 `git add -A && git commit -m "..." && git push` 即可。
+
+## 為什麼不用 google.script.run（改用 fetch 打 API）
+
+Apps Script 網頁應用程式內建的 `google.script.run` 橋接層，每次呼叫都需要在一個隱藏 iframe 裡跳出 Google 自己的授權確認畫面（`createOAuthDialog`）。實測發現：部分瀏覽器環境（防毒/資安軟體、公司網路的 SSL 檢測代理伺服器等）會讓那個授權畫面本身壞掉噴出 `TypeError: Cannot read properties of null` 之類的錯誤，且錯誤發生在 Google 自己的程式碼裡，不是我們能修的 bug，也不受第三方 Cookie 設定或瀏覽器擴充套件影響（換乾淨的 Chrome 設定檔測試依然重現）。
+
+因此 `Code.js` 的 `doGet`/`doPost` 多了一個 `handleApiCall_` 分派器：前端改用單純的 `fetch()` 打部署網址本身，帶 `{ action, args }`，伺服器依 `API_WHITELIST_` 白名單分派到對應的 `api_*` 函式，完全繞開那個容易壞的授權彈窗機制。`AdminDashboard.html`／`SpeakerForm.html` 裡刻意寫了一個模仿 `google.script.run` 呼叫方式的 `google.script.run` shim（`.withSuccessHandler().withFailureHandler().函式名(引數)`），所以業務邏輯的程式碼看起來完全沒變，只有底層傳輸方式換了。
+
+**代價**：因為 fetch() 呼叫不會帶 Google 登入 Cookie，伺服器端沒辦法再用 `Session.getActiveUser()` 可靠地判斷是誰在呼叫，改成前端在頁面載入當下（這是唯一 Session 保證可靠的地方）把驗證過的 Email 記下來，之後每次 API 呼叫原樣傳回去，伺服器直接信任這個值做角色比對。詳見上方「已知限制」。
 
 ## 郵件寄送與「窗口確認」機制
 

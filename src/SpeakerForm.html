@@ -44,6 +44,54 @@
 
   <script>
     var TOKEN = <?!= JSON.stringify(token) ?>;
+    var SCRIPT_URL = <?!= JSON.stringify(scriptUrl) ?>;
+
+    /**
+     * 不使用 google.script.run（需要跳出 Google 的授權確認彈窗，在部分瀏覽器環境會壞掉噴錯，
+     * 講者是外部使用者，這個風險更不能接受）。改用單純 fetch() 打部署網址本身，
+     * 呼叫端程式碼的寫法（.withSuccessHandler().withFailureHandler().函式名(引數)）維持不變。
+     */
+    var google = {
+      script: {
+        get run() {
+          var successHandler = null;
+          var failureHandler = null;
+          var proxy;
+          var chain = {
+            withSuccessHandler: function (fn) { successHandler = fn; return proxy; },
+            withFailureHandler: function (fn) { failureHandler = fn; return proxy; }
+          };
+          proxy = new Proxy(chain, {
+            get: function (target, prop) {
+              if (prop in target) return target[prop];
+              return function () {
+                var args = Array.prototype.slice.call(arguments);
+                callApi_(String(prop), args).then(function (result) {
+                  if (successHandler) successHandler(result);
+                }).catch(function (err) {
+                  if (failureHandler) failureHandler(err); else console.error(err);
+                });
+              };
+            }
+          });
+          return proxy;
+        }
+      }
+    };
+
+    function callApi_(action, args) {
+      return fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: action, args: args })
+      }).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status + '：' + res.statusText);
+        return res.json();
+      }).then(function (json) {
+        if (!json.ok) throw new Error(json.error || '未知錯誤');
+        return json.result;
+      });
+    }
 
     function load() {
       google.script.run.withSuccessHandler(render).withFailureHandler(showError).getSpeakerFormData(TOKEN);

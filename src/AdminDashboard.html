@@ -143,6 +143,63 @@
   </main>
 
   <script>
+    var CALLER_EMAIL = <?!= JSON.stringify(callerEmail) ?>;
+    var SCRIPT_URL = <?!= JSON.stringify(scriptUrl) ?>;
+
+    /**
+     * 這個網頁應用程式不使用 Apps Script 內建的 google.script.run 橋接層——那個機制需要跳出
+     * Google 自己的授權確認彈窗（createOAuthDialog），在部分瀏覽器環境（第三方 Cookie 政策、
+     * 資安軟體、公司網路代理伺服器等）會讓那個彈窗本身壞掉噴錯，且無法從我們這端修復。
+     *
+     * 改用單純的 fetch() 呼叫部署網址本身（doPost 會依 action 分派到對應的 api_* 函式），
+     * 完全繞開那個容易壞的機制。下面這個 shim 刻意模仿 google.script.run 的
+     * .withSuccessHandler().withFailureHandler().方法名(引數) 呼叫方式，
+     * 所以下面所有呼叫端程式碼都不用改寫。
+     */
+    var google = {
+      script: {
+        get run() {
+          var successHandler = null;
+          var failureHandler = null;
+          var proxy; // withSuccessHandler/withFailureHandler 必須回傳 proxy 本身，
+                     // 呼叫端才能繼續在後面串接 .api_xxx(...)（例如 .withFailureHandler(f).api_listActivities()）。
+          var chain = {
+            withSuccessHandler: function (fn) { successHandler = fn; return proxy; },
+            withFailureHandler: function (fn) { failureHandler = fn; return proxy; }
+          };
+          proxy = new Proxy(chain, {
+            get: function (target, prop) {
+              if (prop in target) return target[prop];
+              return function () {
+                var action = String(prop).replace(/^api_/, '');
+                var args = Array.prototype.slice.call(arguments);
+                callApi_(action, args).then(function (result) {
+                  if (successHandler) successHandler(result);
+                }).catch(function (err) {
+                  if (failureHandler) failureHandler(err); else console.error(err);
+                });
+              };
+            }
+          });
+          return proxy;
+        }
+      }
+    };
+
+    function callApi_(action, args) {
+      return fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 純文字 content-type 可避免瀏覽器發出 CORS 預檢請求
+        body: JSON.stringify({ action: action, args: args, callerEmail: CALLER_EMAIL })
+      }).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status + '：' + res.statusText);
+        return res.json();
+      }).then(function (json) {
+        if (!json.ok) throw new Error(json.error || ('未知錯誤（' + json.action + '）'));
+        return json.result;
+      });
+    }
+
     var currentActivityId = null;
     var editingActivityId = null;
     var editingSpeakerId = null;

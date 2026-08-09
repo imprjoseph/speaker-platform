@@ -17,7 +17,21 @@ function writeAudit_(actorEmail, action, entityType, entityId, detail) {
   sh.appendRow([newId_('LOG'), nowIso_(), actorEmail || '(unknown)', action, entityType, entityId, detail || '']);
 }
 
+/**
+ * 一般情況下用 Session.getActiveUser() 判斷是誰在操作。
+ * 但透過 fetch() 呼叫的 API（見 Code.js 的 handleApiCall_）不會帶 Google 的登入 Cookie，
+ * Session.getActiveUser() 在那個路徑下永遠是空的，所以改成由前端在頁面載入時，
+ * 把「當時用 Session 驗證過」的 Email 記下來，之後每次呼叫都夾帶回來，由這裡覆蓋。
+ * 這是已知的信任折衷（見 README「已知限制」），僅適用小型內部團隊試用階段。
+ */
+var CALLER_EMAIL_OVERRIDE_ = null;
+
+function setCallerEmailOverride_(email) {
+  CALLER_EMAIL_OVERRIDE_ = email || null;
+}
+
 function currentUserEmail_() {
+  if (CALLER_EMAIL_OVERRIDE_) return CALLER_EMAIL_OVERRIDE_;
   try {
     return Session.getActiveUser().getEmail() || '(anonymous)';
   } catch (e) {
