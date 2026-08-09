@@ -9,7 +9,14 @@ function api_currentUser() {
 }
 
 function api_listActivities() {
-  return listActivities();
+  // StartDate/EndDate 從試算表讀回來是 Date 物件，直接丟給前端會變成落落長的英文日期字串，
+  // 也塞不進 <input type="date">，這裡先格式化成 yyyy-MM-dd 字串再回傳。
+  return listActivities().map(function (a) {
+    var copy = Object.assign({}, a);
+    copy.StartDate = a.StartDate ? formatDate_(a.StartDate) : '';
+    copy.EndDate = a.EndDate ? formatDate_(a.EndDate) : '';
+    return copy;
+  });
 }
 
 function api_createActivity(input) {
