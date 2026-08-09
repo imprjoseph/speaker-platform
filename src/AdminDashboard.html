@@ -187,11 +187,11 @@
     };
 
     function callApi_(action, args) {
-      return fetch(SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 純文字 content-type 可避免瀏覽器發出 CORS 預檢請求
-        body: JSON.stringify({ action: action, args: args, callerEmail: CALLER_EMAIL })
-      }).then(function (res) {
+      // 實測這個部署對 POST 請求會回 401，GET 請求完全正常，所以一律用 GET，
+      // 把呼叫內容包成 JSON 字串放進 ?payload= 參數（見 Code.js 的 parseApiPayload_）。
+      var payload = JSON.stringify({ args: args, callerEmail: CALLER_EMAIL });
+      var url = SCRIPT_URL + '?api=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(payload) + '&_=' + Date.now();
+      return fetch(url, { method: 'GET', cache: 'no-store' }).then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status + '：' + res.statusText);
         return res.json();
       }).then(function (json) {

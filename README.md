@@ -83,6 +83,8 @@ Apps Script 網頁應用程式內建的 `google.script.run` 橋接層，每次�
 
 **代價**：因為 fetch() 呼叫不會帶 Google 登入 Cookie，伺服器端沒辦法再用 `Session.getActiveUser()` 可靠地判斷是誰在呼叫，改成前端在頁面載入當下（這是唯一 Session 保證可靠的地方）把驗證過的 Email 記下來，之後每次 API 呼叫原樣傳回去，伺服器直接信任這個值做角色比對。詳見上方「已知限制」。
 
+**補充（實測踩坑）**：一開始 `callApi_` 是用 `fetch(..., { method: 'POST' })`，結果這個部署對 POST 請求一律回 `HTTP 401`，但對 GET 完全正常（用瀏覽器直接開 `?api=currentUser` 這種網址可以拿到正確 JSON）。原因未完全確定，但既然 GET 穩定可用，前端全部改成 GET，把呼叫內容序列化成 JSON 字串放進 `?payload=` 參數（見 `Code.js` 的 `parseApiPayload_`）。**已知限制**：`submitFileUpload` 的 base64 檔案內容如果太大，會讓網址超過瀏覽器／伺服器可接受的長度而失敗；目前只驗證過一般大小的 CV／照片，如果之後常常上傳失敗，需要改成分段上傳（chunked upload）。
+
 ## 郵件寄送與「窗口確認」機制
 
 所有信件（不論是後台手動排入，或每日排程自動產生的提醒）都會先寫入 `MailQueue` 分頁，狀態為「待確認」。**只有在後台「郵件待審」頁籤按下「確認寄出」，系統才會呼叫 `MailApp.sendEmail` 真正寄出**（`MailService.js` 的 `approveMail` → `sendQueueItem_`）。這同時滿足：

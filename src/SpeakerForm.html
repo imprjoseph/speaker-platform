@@ -80,11 +80,13 @@
     };
 
     function callApi_(action, args) {
-      return fetch(SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: action, args: args })
-      }).then(function (res) {
+      // 實測這個部署對 POST 請求會回 401，GET 完全正常，所以一律用 GET，
+      // 把呼叫內容包成 JSON 字串放進 ?payload= 參數。
+      // 已知限制：檔案上傳(submitFileUpload)的 base64 內容如果太大，網址會超長而失敗；
+      // 目前先用於一般大小的 CV/照片，如果實測常常失敗，需要改成分段上傳。
+      var payload = JSON.stringify({ args: args, callerEmail: null });
+      var url = SCRIPT_URL + '?api=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(payload) + '&_=' + Date.now();
+      return fetch(url, { method: 'GET', cache: 'no-store' }).then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status + '：' + res.statusText);
         return res.json();
       }).then(function (json) {

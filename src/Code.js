@@ -102,16 +102,24 @@ var API_WHITELIST_ = {
   submitFileUpload: submitFileUpload
 };
 
+/**
+ * 實測發現：這個部署對 POST 請求會擋下（回 401），對 GET 請求完全正常（不論是否帶
+ * ?token= 或 ?api=，一律通過）。原因不明（懷疑是 Google 平台層對「看起來會改資料」的
+ * 跨網域請求做了比 GET 更嚴格的檢查），但既然 GET 穩定可用，前端一律改用 GET，
+ * 把整個呼叫內容（args、callerEmail）序列化成 JSON 字串放進 ?payload= 參數。
+ * doPost 路徑保留著，只是目前前端不會用到；日後若要做大型檔案上傳（GET 網址長度不夠放
+ * base64 內容）需要另外設計分段上傳，屆時再處理。
+ */
 function handleApiCall_(e) {
   var action = '(unknown)';
   try {
-    var body = (e.postData && e.postData.contents) ? JSON.parse(e.postData.contents) : {};
-    action = (e.parameter && e.parameter.api) || body.action;
-    var args = body.args || [];
+    var payload = parseApiPayload_(e);
+    action = (e.parameter && e.parameter.api) || payload.action;
+    var args = payload.args || [];
     var fn = API_WHITELIST_[action];
     if (!fn) throw new Error('未知的 API：' + action);
 
-    setCallerEmailOverride_(body.callerEmail || null);
+    setCallerEmailOverride_(payload.callerEmail || null);
     var result = fn.apply(null, args);
     setCallerEmailOverride_(null);
     return jsonOutput_({ ok: true, result: result });
@@ -119,6 +127,12 @@ function handleApiCall_(e) {
     setCallerEmailOverride_(null);
     return jsonOutput_({ ok: false, action: action, error: err.message });
   }
+}
+
+function parseApiPayload_(e) {
+  if (e.parameter && e.parameter.payload) return JSON.parse(e.parameter.payload);
+  if (e.postData && e.postData.contents) return JSON.parse(e.postData.contents);
+  return {};
 }
 
 function jsonOutput_(obj) {
