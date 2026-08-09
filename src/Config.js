@@ -40,8 +40,10 @@ SCHEMA[SHEETS.SESSIONS] = [
 SCHEMA[SHEETS.SPEAKERS] = [
   'SpeakerId', 'NameZh', 'NameEn', 'Title', 'Organization', 'Email', 'Phone',
   'AssistantName', 'AssistantEmail', 'CountryTimezone',
-  'ReusableCvDriveId', 'ReusablePhotoDriveId', 'DuplicateOfSpeakerId', 'CreatedAt'
+  'ReusableCvDriveId', 'ReusablePhotoDriveId', 'DuplicateOfSpeakerId', 'CreatedAt',
+  'PreferredLanguage'
 ];
+// PreferredLanguage: zh | en —— 決定寄送邀請/提醒信預設使用哪個語言範本
 
 SCHEMA[SHEETS.ACTIVITY_SPEAKERS] = [
   'ActivitySpeakerId', 'ActivityId', 'SpeakerId', 'SessionId', 'Role',
@@ -52,9 +54,10 @@ SCHEMA[SHEETS.ACTIVITY_SPEAKERS] = [
 
 SCHEMA[SHEETS.DATA_REQUIREMENTS] = [
   'ReqId', 'ActivityId', 'FieldKey', 'LabelZh', 'LabelEn', 'FieldType',
-  'Required', 'DeadlineOffsetDays', 'PublicUse', 'ReviewRequired', 'DisplayOrder'
+  'Required', 'DeadlineOffsetDays', 'PublicUse', 'ReviewRequired', 'DisplayOrder', 'Options'
 ];
 // FieldType: text | textarea | file | select | date
+// Options：僅 FieldType = select 時使用，逗號分隔（例如 "需要,不需要"）
 
 SCHEMA[SHEETS.RESPONSES] = [
   'ResponseId', 'ActivitySpeakerId', 'FieldKey', 'Value', 'Status', 'UpdatedAt', 'UpdatedBy'
@@ -93,12 +96,29 @@ SCHEMA[SHEETS.AUDIT_LOG] = [
   'LogId', 'Timestamp', 'ActorEmail', 'Action', 'EntityType', 'EntityId', 'Detail'
 ];
 
+var COMPANY_NAME = '新動力公共關係顧問股份有限公司';
+
 var PROP_KEYS = {
   WEBAPP_BASE_URL: 'WEBAPP_BASE_URL',
   DEFAULT_LANGUAGE: 'DEFAULT_LANGUAGE',
   FROM_NAME: 'FROM_NAME',
   FILES_ROOT_FOLDER_ID: 'FILES_ROOT_FOLDER_ID'
 };
+
+/**
+ * 常用資料需求快速設定：活動建立時最常勾選的 7 種欄位。
+ * 對應規劃書 Module 4（彈性表單）／5（檔案）／8（旅運）／9（飲食特殊需求）的常見組合，
+ * 深度旅運/飲食欄位（航廈、車號等）留到第二階段的專屬表單，這裡先提供夠用的單欄位版本。
+ */
+var STANDARD_FIELDS = [
+  { fieldKey: 'cv', labelZh: 'CV／個人簡介', labelEn: 'CV / Biography', fieldType: 'file', required: true, deadlineOffsetDays: -45 },
+  { fieldKey: 'photo', labelZh: '大頭照', labelEn: 'Headshot Photo', fieldType: 'file', required: true, deadlineOffsetDays: -30 },
+  { fieldKey: 'deck', labelZh: '簡報', labelEn: 'Presentation Deck', fieldType: 'file', required: false, deadlineOffsetDays: -7 },
+  { fieldKey: 'flight', labelZh: '航班資訊（去程／回程、時間、班機號）', labelEn: 'Flight Details', fieldType: 'textarea', required: false, deadlineOffsetDays: -14 },
+  { fieldKey: 'diet', labelZh: '飲食習慣／過敏', labelEn: 'Dietary Preference / Allergy', fieldType: 'text', required: false, deadlineOffsetDays: -14 },
+  { fieldKey: 'pickup', labelZh: '需要接機', labelEn: 'Needs Airport Pickup', fieldType: 'select', options: '需要,不需要', required: false, deadlineOffsetDays: -14 },
+  { fieldKey: 'visit', labelZh: '參訪安排', labelEn: 'Site Visit', fieldType: 'select', options: '參加,不參加', required: false, deadlineOffsetDays: -14 }
+];
 
 var STATUS = {
   RESPONSE: {

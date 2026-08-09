@@ -95,6 +95,12 @@
       if (f.fieldType === 'date') {
         return '<input type="date" id="' + id + '" value="' + (f.value || '') + '">';
       }
+      if (f.fieldType === 'select') {
+        var opts = (f.options || []).map(function (o) {
+          return '<option value="' + o + '"' + (o === f.value ? ' selected' : '') + '>' + o + '</option>';
+        }).join('');
+        return '<select id="' + id + '"><option value="">請選擇</option>' + opts + '</select>';
+      }
       if (f.fieldType === 'file') {
         return '<input type="file" id="' + id + '" data-fieldkey="' + f.fieldKey + '">' +
           (f.value ? '<div class="meta">已上傳一份檔案</div>' : '');

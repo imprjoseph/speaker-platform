@@ -4,48 +4,60 @@
   <base target="_top">
   <style>
     body { font-family: "Microsoft JhengHei", -apple-system, sans-serif; margin: 0; background: #F4F6FA; color: #222; }
-    header { background: #1F3864; color: #fff; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+    header { background: #1F3864; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
     header h1 { font-size: 18px; margin: 0; }
-    nav { display: flex; gap: 8px; padding: 10px 20px; background: #fff; border-bottom: 1px solid #ddd; }
+    header .sub { font-size: 12px; opacity: .8; margin-top: 2px; }
+    nav { display: flex; gap: 8px; padding: 10px 20px; background: #fff; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
     nav button { background: none; border: none; padding: 8px 12px; cursor: pointer; font-size: 14px; border-radius: 6px; }
     nav button.active { background: #1F3864; color: #fff; }
     main { padding: 20px; max-width: 1000px; margin: 0 auto; }
     .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .card h3 { margin-top: 0; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; }
     th { color: #555; }
     .pill { padding: 2px 8px; border-radius: 10px; background: #eee; font-size: 12px; }
     .pill.warn { background: #fbdada; color: #a10c0c; }
-    button.action { background: #1F3864; color: #fff; border: none; padding: 6px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; margin-right: 4px; }
+    button.action { background: #1F3864; color: #fff; border: none; padding: 6px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; margin-right: 4px; margin-bottom: 4px; }
     button.action.reject { background: #a10c0c; }
     button.action.secondary { background: #eee; color: #222; }
-    input, select { padding: 6px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; }
+    input, select, textarea { padding: 6px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; font-family: inherit; }
+    textarea { width: 100%; box-sizing: border-box; min-height: 80px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
     .stat { background: #F4F6FA; border-radius: 8px; padding: 12px; text-align: center; }
     .stat .num { font-size: 22px; font-weight: 700; color: #1F3864; }
     .stat .lbl { font-size: 12px; color: #666; }
-    .row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    .checklist { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+    .checklist label { font-size: 13px; display: flex; align-items: center; gap: 4px; }
+    .hint { font-size: 12px; color: #777; margin: 4px 0 10px; }
+    .editing-flag { font-size: 12px; color: #a10c0c; margin-bottom: 6px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>講者協作與會務追蹤平台</h1>
+    <div>
+      <h1>講者協作與會務追蹤平台</h1>
+      <div class="sub" id="companyLine"></div>
+    </div>
     <span id="whoami" style="font-size:12px;opacity:.85"></span>
   </header>
   <nav>
     <button class="active" onclick="showTab('activities')">活動</button>
     <button onclick="showTab('board')">講者與任務</button>
     <button onclick="showTab('mail')">郵件待審（窗口確認）</button>
+    <button onclick="showTab('accounts')">帳號管理</button>
   </nav>
   <main>
     <section id="tab-activities">
       <div class="card">
-        <h3>建立活動</h3>
+        <h3 id="activityFormTitle">建立活動</h3>
+        <div id="activityEditingFlag" class="editing-flag" style="display:none">編輯中，儲存後會更新原活動（不是新建一筆）。<a href="#" onclick="cancelEditActivity();return false">取消編輯</a></div>
         <div class="row-form">
           <input id="a_nameZh" placeholder="活動名稱（中）">
           <input id="a_startDate" type="date">
           <input id="a_venue" placeholder="會場">
-          <button class="action" onclick="createActivity(this)">建立</button>
+          <button class="action" id="activitySubmitBtn" onclick="submitActivity(this)">建立</button>
         </div>
       </div>
       <div class="card">
@@ -63,16 +75,35 @@
         </div>
         <div class="grid" id="dashboardStats"></div>
       </div>
+
       <div class="card">
-        <h3>新增講者</h3>
+        <h3>資料需求設定</h3>
+        <p class="hint">勾選這場活動要蒐集的項目，套用後會自動加入每位講者的待辦清單。深度旅運欄位（航廈、車號等）留待第二階段擴充，這裡先提供夠用的單欄位版本。</p>
+        <div class="checklist" id="standardFieldsChecklist"></div>
+        <button class="action" onclick="applyStandardFields(this)">套用勾選項目</button>
+        <div id="currentRequirementsList" style="margin-top:10px;font-size:12px;color:#555"></div>
+      </div>
+
+      <div class="card">
+        <h3 id="speakerFormTitle">新增講者</h3>
+        <div id="speakerEditingFlag" class="editing-flag" style="display:none">編輯中，儲存後會更新原講者資料。<a href="#" onclick="cancelEditSpeaker();return false">取消編輯</a></div>
         <div class="row-form">
           <input id="s_nameZh" placeholder="姓名">
           <input id="s_email" placeholder="Email">
           <input id="s_title" placeholder="職稱">
           <input id="s_org" placeholder="單位">
-          <button class="action" onclick="addSpeaker(this)">加入並產生邀請連結</button>
+          <select id="s_lang"><option value="zh">中文</option><option value="en">English</option></select>
+          <button class="action" id="speakerSubmitBtn" onclick="submitSpeaker(this)">加入並產生邀請連結</button>
         </div>
       </div>
+
+      <div class="card">
+        <h3>批次匯入講者（從 Excel 貼上）</h3>
+        <p class="hint">從 Excel 選取欄位「姓名、Email、職稱、單位、助理姓名、助理Email」直接複製貼上（Tab 或逗號分隔皆可），每列一位講者。</p>
+        <textarea id="importText" placeholder="王小明	wang@example.com	執行長	新動力公關	李助理	assistant@example.com"></textarea>
+        <button class="action" style="margin-top:8px" onclick="importSpeakers(this)">解析並匯入</button>
+      </div>
+
       <div class="card">
         <h3>逐項狀態</h3>
         <table id="boardTable"><thead><tr><th>講者</th><th>邀請狀態</th><th>缺件</th><th>項目明細</th><th></th></tr></thead><tbody></tbody></table>
@@ -85,10 +116,36 @@
         <table id="mailTable"><thead><tr><th>收件人</th><th>主旨</th><th>語言</th><th>狀態</th><th></th></tr></thead><tbody></tbody></table>
       </div>
     </section>
+
+    <section id="tab-accounts" style="display:none">
+      <div class="card">
+        <h3>新增使用者</h3>
+        <p class="hint">僅系統管理員可以新增／修改／移除帳號。</p>
+        <div class="row-form">
+          <input id="u_name" placeholder="姓名">
+          <input id="u_email" placeholder="Email（需為 Google 帳號）">
+          <select id="u_role">
+            <option value="SystemAdmin">系統管理員</option>
+            <option value="ProjectLead">專案主管</option>
+            <option value="ProjectMember" selected>專案成員</option>
+            <option value="OnsiteStaff">接待／現場人員</option>
+            <option value="ClientReadOnly">客戶／合作單位（唯讀）</option>
+          </select>
+          <button class="action" onclick="addUser(this)">新增</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>使用者列表</h3>
+        <table id="usersTable"><thead><tr><th>姓名</th><th>Email</th><th>角色</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
   </main>
 
   <script>
     var currentActivityId = null;
+    var editingActivityId = null;
+    var editingSpeakerId = null;
+    var standardFields = [];
 
     /**
      * 防止重複送出：呼叫期間鎖住按鈕並顯示「處理中…」，避免使用者以為畫面卡住而連續點擊
@@ -104,20 +161,27 @@
     }
 
     function showTab(name) {
-      ['activities', 'board', 'mail'].forEach(function (t) {
+      ['activities', 'board', 'mail', 'accounts'].forEach(function (t) {
         document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
       });
       Array.from(document.querySelectorAll('nav button')).forEach(function (b) { b.classList.remove('active'); });
       event.target.classList.add('active');
       if (name === 'mail') loadMailQueue();
+      if (name === 'accounts') loadUsers();
     }
+
+    function alertErr(err) { alert('發生錯誤：' + err.message); }
 
     function init() {
       google.script.run.withSuccessHandler(function (u) {
-        document.getElementById('whoami').textContent = u.name + (u.role ? '（' + u.role + '）' : '（尚未授權）');
+        document.getElementById('whoami').textContent = u.name + (u.role ? '（' + u.role + '）' : '（尚未授權，僅能瀏覽）');
+        document.getElementById('companyLine').textContent = u.companyName;
       }).api_currentUser();
+      google.script.run.withSuccessHandler(function (fields) { standardFields = fields; renderStandardFieldsChecklist(); }).api_listStandardFields();
       loadActivities();
     }
+
+    // ---------------- 活動 ----------------
 
     function loadActivities() {
       google.script.run.withSuccessHandler(function (list) {
@@ -127,26 +191,73 @@
         select.innerHTML = '';
         list.forEach(function (a) {
           tbody.innerHTML += '<tr><td>' + a.NameZh + '</td><td>' + a.StartDate + '</td><td><span class="pill">' + a.Status + '</span></td>' +
-            '<td><button class="action secondary" onclick="openBoard(\'' + a.ActivityId + '\')">開啟</button></td></tr>';
+            '<td>' +
+            '<button class="action secondary" onclick="openBoard(\'' + a.ActivityId + '\')">開啟</button>' +
+            '<button class="action secondary" onclick="startEditActivity(\'' + a.ActivityId + '\',\'' + esc_(a.NameZh) + '\',\'' + a.StartDate + '\',\'' + esc_(a.Venue) + '\')">編輯</button>' +
+            '<button class="action secondary" onclick="archiveActivityAction(\'' + a.ActivityId + '\')">封存</button>' +
+            '<button class="action reject" onclick="deleteActivityAction(\'' + a.ActivityId + '\')">刪除</button>' +
+            '</td></tr>';
           select.innerHTML += '<option value="' + a.ActivityId + '">' + a.NameZh + '</option>';
         });
         if (list.length) { currentActivityId = list[0].ActivityId; loadBoard(); }
       }).api_listActivities();
     }
 
-    function createActivity(btn) {
+    function esc_(s) { return String(s || '').replace(/'/g, "\\'"); }
+
+    function submitActivity(btn) {
       var input = {
         nameZh: document.getElementById('a_nameZh').value,
         startDate: document.getElementById('a_startDate').value,
         venue: document.getElementById('a_venue').value
       };
       if (!input.nameZh || !input.startDate) { alert('請填寫活動名稱與日期'); return; }
+
       withBusy(btn, function (done) {
-        google.script.run
-          .withSuccessHandler(function (r) { done(); loadActivities(); })
-          .withFailureHandler(function (err) { done(); alertErr(err); })
-          .api_createActivity(input);
+        var call = editingActivityId
+          ? google.script.run.withSuccessHandler(function () { done(); cancelEditActivity(); loadActivities(); })
+              .withFailureHandler(function (err) { done(); alertErr(err); })
+              .api_updateActivity(editingActivityId, { NameZh: input.nameZh, StartDate: input.startDate, Venue: input.venue })
+          : google.script.run.withSuccessHandler(function () { done(); loadActivities(); clearActivityForm_(); })
+              .withFailureHandler(function (err) { done(); alertErr(err); })
+              .api_createActivity(input);
       });
+    }
+
+    function clearActivityForm_() {
+      document.getElementById('a_nameZh').value = '';
+      document.getElementById('a_startDate').value = '';
+      document.getElementById('a_venue').value = '';
+    }
+
+    function startEditActivity(activityId, nameZh, startDate, venue) {
+      editingActivityId = activityId;
+      document.getElementById('a_nameZh').value = nameZh;
+      document.getElementById('a_startDate').value = startDate;
+      document.getElementById('a_venue').value = venue;
+      document.getElementById('activityFormTitle').textContent = '編輯活動';
+      document.getElementById('activitySubmitBtn').textContent = '更新活動';
+      document.getElementById('activityEditingFlag').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function cancelEditActivity() {
+      editingActivityId = null;
+      clearActivityForm_();
+      document.getElementById('activityFormTitle').textContent = '建立活動';
+      document.getElementById('activitySubmitBtn').textContent = '建立';
+      document.getElementById('activityEditingFlag').style.display = 'none';
+    }
+
+    function archiveActivityAction(activityId) {
+      if (!confirm('封存後活動會從進行中列表隱藏，但資料都會保留，之後仍可查詢。確定封存？')) return;
+      google.script.run.withSuccessHandler(loadActivities).withFailureHandler(alertErr).api_archiveActivity(activityId);
+    }
+
+    function deleteActivityAction(activityId) {
+      if (!confirm('這會永久刪除這場活動與底下所有講者、資料、郵件紀錄，且無法復原！確定要刪除嗎？')) return;
+      if (!confirm('再次確認：真的要永久刪除嗎？此動作無法復原。')) return;
+      google.script.run.withSuccessHandler(loadActivities).withFailureHandler(alertErr).api_deleteActivity(activityId);
     }
 
     function openBoard(activityId) {
@@ -162,6 +273,7 @@
       if (!currentActivityId) return;
       google.script.run.withSuccessHandler(renderDashboard).api_getDashboard(currentActivityId);
       google.script.run.withSuccessHandler(renderBoard).api_getTaskBoard(currentActivityId);
+      loadDataRequirements();
     }
 
     function renderDashboard(d) {
@@ -179,34 +291,148 @@
         tbody.innerHTML += '<tr><td>' + b.speakerName + '</td><td>' + b.inviteStatus + '</td>' +
           '<td>' + (b.missingCount ? '<span class="pill warn">' + b.missingCount + '</span>' : '<span class="pill">0</span>') + '</td>' +
           '<td style="font-size:12px">' + itemsText + '</td>' +
-          '<td><button class="action secondary" onclick="composeInvite(this, \'' + b.activitySpeakerId + '\')">排入邀請信</button></td></tr>';
+          '<td>' +
+          '<button class="action secondary" onclick="composeInvite(this, \'' + b.activitySpeakerId + '\')">排入邀請信</button>' +
+          '<button class="action secondary" onclick="startEditSpeaker(\'' + b.activitySpeakerId + '\')">編輯</button>' +
+          '<button class="action reject" onclick="removeSpeaker(\'' + b.activitySpeakerId + '\')">移除</button>' +
+          '</td></tr>';
       });
     }
 
-    function addSpeaker(btn) {
+    // ---------------- 資料需求設定 ----------------
+
+    function renderStandardFieldsChecklist() {
+      var box = document.getElementById('standardFieldsChecklist');
+      box.innerHTML = standardFields.map(function (f) {
+        return '<label><input type="checkbox" value="' + f.fieldKey + '" id="std_' + f.fieldKey + '">' + f.labelZh + '</label>';
+      }).join('');
+    }
+
+    function loadDataRequirements() {
+      if (!currentActivityId) return;
+      google.script.run.withSuccessHandler(function (reqs) {
+        var box = document.getElementById('currentRequirementsList');
+        box.textContent = reqs.length ? ('已設定：' + reqs.map(function (r) { return r.LabelZh; }).join('、')) : '這場活動尚未設定任何資料需求。';
+        standardFields.forEach(function (f) {
+          var el = document.getElementById('std_' + f.fieldKey);
+          if (el) el.checked = reqs.some(function (r) { return r.FieldKey === f.fieldKey; });
+        });
+      }).api_listDataRequirements(currentActivityId);
+    }
+
+    function applyStandardFields(btn) {
+      if (!currentActivityId) { alert('請先選擇活動'); return; }
+      var checked = standardFields.map(function (f) { return f.fieldKey; })
+        .filter(function (key) { return document.getElementById('std_' + key).checked; });
+      if (!checked.length) { alert('請至少勾選一項'); return; }
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function () { done(); loadDataRequirements(); loadBoard(); })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_addStandardFields(currentActivityId, checked);
+      });
+    }
+
+    // ---------------- 講者 ----------------
+
+    function submitSpeaker(btn) {
       if (!currentActivityId) { alert('請先選擇活動'); return; }
       var speakerInput = {
         nameZh: document.getElementById('s_nameZh').value, email: document.getElementById('s_email').value,
-        title: document.getElementById('s_title').value, organization: document.getElementById('s_org').value
+        title: document.getElementById('s_title').value, organization: document.getElementById('s_org').value,
+        preferredLanguage: document.getElementById('s_lang').value
       };
       if (!speakerInput.nameZh) { alert('請輸入姓名'); return; }
+
       withBusy(btn, function (done) {
-        google.script.run
-          .withSuccessHandler(function (res) { done(); if (res.duplicateWarning) alert(res.duplicateWarning); loadBoard(); })
-          .withFailureHandler(function (err) { done(); alertErr(err); })
-          .api_addSpeaker(currentActivityId, speakerInput, {});
+        if (editingSpeakerId) {
+          google.script.run
+            .withSuccessHandler(function () { done(); cancelEditSpeaker(); loadBoard(); })
+            .withFailureHandler(function (err) { done(); alertErr(err); })
+            .api_updateSpeaker(editingSpeakerId, {
+              NameZh: speakerInput.nameZh, Email: speakerInput.email, Title: speakerInput.title,
+              Organization: speakerInput.organization, PreferredLanguage: speakerInput.preferredLanguage
+            });
+        } else {
+          google.script.run
+            .withSuccessHandler(function (res) { done(); if (res.duplicateWarning) alert(res.duplicateWarning); clearSpeakerForm_(); loadBoard(); })
+            .withFailureHandler(function (err) { done(); alertErr(err); })
+            .api_addSpeaker(currentActivityId, speakerInput, {});
+        }
       });
     }
 
+    function clearSpeakerForm_() {
+      document.getElementById('s_nameZh').value = '';
+      document.getElementById('s_email').value = '';
+      document.getElementById('s_title').value = '';
+      document.getElementById('s_org').value = '';
+      document.getElementById('s_lang').value = 'zh';
+    }
+
+    function startEditSpeaker(activitySpeakerId) {
+      google.script.run.withSuccessHandler(function (detail) {
+        editingSpeakerId = detail.speaker.SpeakerId;
+        document.getElementById('s_nameZh').value = detail.speaker.NameZh;
+        document.getElementById('s_email').value = detail.speaker.Email;
+        document.getElementById('s_title').value = detail.speaker.Title;
+        document.getElementById('s_org').value = detail.speaker.Organization;
+        document.getElementById('s_lang').value = detail.speaker.PreferredLanguage || 'zh';
+        document.getElementById('speakerFormTitle').textContent = '編輯講者';
+        document.getElementById('speakerSubmitBtn').textContent = '更新講者';
+        document.getElementById('speakerEditingFlag').style.display = 'block';
+        window.scrollTo(0, document.getElementById('speakerFormTitle').offsetTop);
+      }).withFailureHandler(alertErr).api_getSpeakerDetail(activitySpeakerId);
+    }
+
+    function cancelEditSpeaker() {
+      editingSpeakerId = null;
+      clearSpeakerForm_();
+      document.getElementById('speakerFormTitle').textContent = '新增講者';
+      document.getElementById('speakerSubmitBtn').textContent = '加入並產生邀請連結';
+      document.getElementById('speakerEditingFlag').style.display = 'none';
+    }
+
+    function removeSpeaker(activitySpeakerId) {
+      if (!confirm('把這位講者從此活動移除？（不會刪除講者主檔，其他活動不受影響）')) return;
+      google.script.run.withSuccessHandler(loadBoard).withFailureHandler(alertErr).api_removeSpeakerFromActivity(activitySpeakerId);
+    }
+
     function composeInvite(btn, activitySpeakerId) {
-      var lang = confirm('英文範本請按「確定」，中文請按「取消」') ? 'TPL_INVITE_EN' : 'TPL_INVITE_ZH';
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(function () { done(); alert('已排入待審佇列，請至「郵件待審」分頁確認寄出。'); })
+          .withSuccessHandler(function () { done(); alert('已依講者語系排入待審佇列，請至「郵件待審」分頁確認寄出。'); })
           .withFailureHandler(function (err) { done(); alertErr(err); })
-          .api_composeInviteMail(activitySpeakerId, lang);
+          .api_composeInviteMail(activitySpeakerId, null);
       });
     }
+
+    function importSpeakers(btn) {
+      if (!currentActivityId) { alert('請先選擇活動'); return; }
+      var text = document.getElementById('importText').value.trim();
+      if (!text) { alert('請先貼上資料'); return; }
+      var rows = text.split('\n').filter(function (l) { return l.trim(); }).map(function (line) {
+        var cols = line.indexOf('\t') !== -1 ? line.split('\t') : line.split(',');
+        return {
+          nameZh: (cols[0] || '').trim(), email: (cols[1] || '').trim(), title: (cols[2] || '').trim(),
+          organization: (cols[3] || '').trim(), assistantName: (cols[4] || '').trim(), assistantEmail: (cols[5] || '').trim()
+        };
+      });
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function (results) {
+            done();
+            var warnings = results.filter(function (r) { return r.duplicateWarning; }).map(function (r) { return r.duplicateWarning; });
+            alert('已匯入 ' + results.length + ' 位講者。' + (warnings.length ? '\n\n' + warnings.join('\n') : ''));
+            document.getElementById('importText').value = '';
+            loadBoard();
+          })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_importSpeakers(currentActivityId, rows);
+      });
+    }
+
+    // ---------------- 郵件待審 ----------------
 
     function loadMailQueue() {
       google.script.run.withSuccessHandler(renderMailQueue).api_listMailQueue(null, null);
@@ -256,6 +482,8 @@
       });
     }
 
+    // ---------------- 匯出 ----------------
+
     function exportRoster(btn) {
       withBusy(btn, function (done) {
         google.script.run
@@ -273,7 +501,54 @@
       });
     }
 
-    function alertErr(err) { alert('發生錯誤：' + err.message); }
+    // ---------------- 帳號管理 ----------------
+
+    function loadUsers() {
+      google.script.run.withSuccessHandler(renderUsers).withFailureHandler(alertErr).api_listUsers();
+    }
+
+    var ROLE_LABELS = {
+      SystemAdmin: '系統管理員', ProjectLead: '專案主管', ProjectMember: '專案成員',
+      OnsiteStaff: '接待／現場人員', ClientReadOnly: '客戶／合作單位（唯讀）'
+    };
+
+    function renderUsers(users) {
+      var tbody = document.querySelector('#usersTable tbody');
+      tbody.innerHTML = '';
+      users.forEach(function (u) {
+        var options = Object.keys(ROLE_LABELS).map(function (r) {
+          return '<option value="' + r + '"' + (r === u.Role ? ' selected' : '') + '>' + ROLE_LABELS[r] + '</option>';
+        }).join('');
+        tbody.innerHTML += '<tr><td>' + u.Name + '</td><td>' + u.Email + '</td>' +
+          '<td><select onchange="changeUserRole(\'' + u.UserId + '\', this.value)">' + options + '</select></td>' +
+          '<td><button class="action reject" onclick="removeUserAction(\'' + u.UserId + '\')">移除</button></td></tr>';
+      });
+    }
+
+    function addUser(btn) {
+      var name = document.getElementById('u_name').value;
+      var email = document.getElementById('u_email').value;
+      var role = document.getElementById('u_role').value;
+      if (!name || !email) { alert('請填寫姓名與 Email'); return; }
+      withBusy(btn, function (done) {
+        google.script.run
+          .withSuccessHandler(function () {
+            done(); loadUsers();
+            document.getElementById('u_name').value = ''; document.getElementById('u_email').value = '';
+          })
+          .withFailureHandler(function (err) { done(); alertErr(err); })
+          .api_addUser(name, email, role);
+      });
+    }
+
+    function changeUserRole(userId, role) {
+      google.script.run.withSuccessHandler(loadUsers).withFailureHandler(alertErr).api_updateUserRole(userId, role);
+    }
+
+    function removeUserAction(userId) {
+      if (!confirm('確定要移除這個帳號？')) return;
+      google.script.run.withSuccessHandler(loadUsers).withFailureHandler(alertErr).api_removeUser(userId);
+    }
 
     init();
   </script>

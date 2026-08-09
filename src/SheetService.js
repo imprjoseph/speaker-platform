@@ -82,6 +82,22 @@ function updateRowByKey_(name, keyField, keyValue, patch) {
   return findOneBy_(name, keyField, keyValue);
 }
 
+/** 依主鍵刪除單一列（實際刪除試算表的那一列）。找不到就靜默回傳 false。 */
+function deleteRowByKey_(name, keyField, keyValue) {
+  var existing = findOneBy_(name, keyField, keyValue);
+  if (!existing) return false;
+  sheet_(name).deleteRow(existing._row);
+  return true;
+}
+
+/** 刪除某欄位等於指定值的所有列（例如清掉某個 ActivitySpeakerId 底下的所有 Responses）。 */
+function deleteRowsBy_(name, field, value) {
+  var sh = sheet_(name);
+  var matches = findRowsBy_(name, field, value).sort(function (a, b) { return b._row - a._row; });
+  matches.forEach(function (row) { sh.deleteRow(row._row); });
+  return matches.length;
+}
+
 function nowIso_() {
   return new Date();
 }

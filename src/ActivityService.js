@@ -11,7 +11,7 @@ function createActivity(input, actorEmail) {
     Timezone: input.timezone || 'Asia/Taipei',
     Language: input.language || 'zh',
     Venue: input.venue || '',
-    Organizer: input.organizer || '',
+    Organizer: input.organizer || COMPANY_NAME,
     Status: 'Active',
     DefaultDeadlineOffsets: JSON.stringify(input.deadlineOffsets || { cv: -45, photo: -30, deck: -7 }),
     ProjectLeadUserId: input.projectLeadUserId || '',
@@ -52,6 +52,35 @@ function duplicateActivity(activityId, overrides, actorEmail) {
   });
 
   return copy;
+}
+
+function updateActivity(activityId, patch, actorEmail) {
+  var allowed = ['NameZh', 'NameEn', 'StartDate', 'EndDate', 'Timezone', 'Language', 'Venue', 'Organizer', 'ProjectLeadUserId'];
+  var safePatch = {};
+  Object.keys(patch).forEach(function (k) { if (allowed.indexOf(k) !== -1) safePatch[k] = patch[k]; });
+  var updated = updateRowByKey_(SHEETS.ACTIVITIES, 'ActivityId', activityId, safePatch);
+  writeAudit_(actorEmail, 'UPDATE_ACTIVITY', SHEETS.ACTIVITIES, activityId, JSON.stringify(safePatch));
+  return updated;
+}
+
+/**
+ * 永久刪除活動與其所有子資料（講者關聯、資料需求、回覆、檔案紀錄、郵件佇列、場次）。
+ * 僅用於清除測試/誤建的活動；正式活動請用 archiveActivity 封存，不要硬刪。
+ * 注意：不會連動刪除 Google Drive 裡已上傳的檔案本體，只清除試算表紀錄。
+ */
+function deleteActivityHard(activityId, actorEmail) {
+  var links = findRowsBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivityId', activityId);
+  links.forEach(function (link) {
+    deleteRowsBy_(SHEETS.RESPONSES, 'ActivitySpeakerId', link.ActivitySpeakerId);
+    deleteRowsBy_(SHEETS.FILES, 'ActivitySpeakerId', link.ActivitySpeakerId);
+    deleteRowsBy_(SHEETS.MAIL_QUEUE, 'ActivitySpeakerId', link.ActivitySpeakerId);
+  });
+  deleteRowsBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivityId', activityId);
+  deleteRowsBy_(SHEETS.DATA_REQUIREMENTS, 'ActivityId', activityId);
+  deleteRowsBy_(SHEETS.SESSIONS, 'ActivityId', activityId);
+  deleteRowsBy_(SHEETS.MAIL_QUEUE, 'ActivityId', activityId);
+  deleteRowByKey_(SHEETS.ACTIVITIES, 'ActivityId', activityId);
+  writeAudit_(actorEmail, 'DELETE_ACTIVITY', SHEETS.ACTIVITIES, activityId, '永久刪除（含所有子資料）');
 }
 
 function archiveActivity(activityId, actorEmail) {

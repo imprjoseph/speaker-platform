@@ -12,10 +12,24 @@ function addDataRequirement(activityId, field, actorEmail) {
     DeadlineOffsetDays: field.deadlineOffsetDays != null ? field.deadlineOffsetDays : -7,
     PublicUse: field.publicUse || '',
     ReviewRequired: !!field.reviewRequired,
-    DisplayOrder: field.displayOrder != null ? field.displayOrder : 999
+    DisplayOrder: field.displayOrder != null ? field.displayOrder : 999,
+    Options: field.options || ''
   });
   writeAudit_(actorEmail, 'ADD_DATA_REQUIREMENT', SHEETS.DATA_REQUIREMENTS, req.ReqId, field.fieldKey);
   return req;
+}
+
+/** 依 fieldKeys（如 ['cv','photo','pickup']）從 Config.STANDARD_FIELDS 批次加入常用欄位，略過已存在的。 */
+function addStandardFields(activityId, fieldKeys, actorEmail) {
+  var existingKeys = listDataRequirements(activityId).map(function (r) { return r.FieldKey; });
+  var added = [];
+  fieldKeys.forEach(function (key) {
+    if (existingKeys.indexOf(key) !== -1) return;
+    var preset = STANDARD_FIELDS.filter(function (f) { return f.fieldKey === key; })[0];
+    if (!preset) return;
+    added.push(addDataRequirement(activityId, preset, actorEmail));
+  });
+  return added;
 }
 
 function listDataRequirements(activityId) {

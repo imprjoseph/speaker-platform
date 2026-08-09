@@ -28,6 +28,15 @@ function addSpeakerToActivity(activityId, speakerId, opts, actorEmail) {
   return link;
 }
 
+/** 把講者從這場活動移除（連帶清掉該活動下的回覆、檔案紀錄、郵件佇列），不影響講者主檔或其他活動。 */
+function removeSpeakerFromActivity(activitySpeakerId, actorEmail) {
+  deleteRowsBy_(SHEETS.RESPONSES, 'ActivitySpeakerId', activitySpeakerId);
+  deleteRowsBy_(SHEETS.FILES, 'ActivitySpeakerId', activitySpeakerId);
+  deleteRowsBy_(SHEETS.MAIL_QUEUE, 'ActivitySpeakerId', activitySpeakerId);
+  deleteRowByKey_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
+  writeAudit_(actorEmail, 'REMOVE_SPEAKER_FROM_ACTIVITY', SHEETS.ACTIVITY_SPEAKERS, activitySpeakerId, '');
+}
+
 function addDays_(date, days) {
   var d = new Date(date);
   d.setDate(d.getDate() + days);

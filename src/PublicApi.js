@@ -15,6 +15,7 @@ function getSpeakerFormData(token) {
     var resp = responses.filter(function (r) { return r.FieldKey === req.FieldKey; })[0];
     return {
       fieldKey: req.FieldKey, labelZh: req.LabelZh, labelEn: req.LabelEn, fieldType: req.FieldType,
+      options: req.Options ? req.Options.split(',') : [],
       required: req.Required, deadline: formatDate_(resolveFieldDeadline(link.ActivitySpeakerId, req.FieldKey)),
       value: resp ? resp.Value : '', status: computeItemStatus(link.ActivitySpeakerId, req.FieldKey)
     };

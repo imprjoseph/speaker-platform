@@ -9,7 +9,8 @@
     "push": "clasp push --force",
     "watch": "clasp push --force --watch",
     "open": "clasp open",
-    "deploy": "clasp deploy",
+    "deploy": "clasp deploy -i AKfycbwySuwYdofZrGTakmJ61YTRwJq7mJjgXEQKRqW8Rm6VLcsIuEDLurwkSwUbDaC9I3Vq -d \"update\"",
+    "release": "npm run push && npm run deploy",
     "logs": "clasp logs"
   },
   "devDependencies": {

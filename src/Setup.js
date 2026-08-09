@@ -22,7 +22,18 @@ function setupSpreadsheet() {
   }
 
   seedDefaultData_(ss);
+  seedScriptProperties_();
   Logger.log('Setup complete. Spreadsheet URL: ' + ss.getUrl());
+}
+
+function seedScriptProperties_() {
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty(PROP_KEYS.FROM_NAME)) {
+    props.setProperty(PROP_KEYS.FROM_NAME, COMPANY_NAME);
+  }
+  if (!props.getProperty(PROP_KEYS.DEFAULT_LANGUAGE)) {
+    props.setProperty(PROP_KEYS.DEFAULT_LANGUAGE, 'zh');
+  }
 }
 
 function getOrCreateBoundSpreadsheet_() {
