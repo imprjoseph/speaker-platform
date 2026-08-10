@@ -85,9 +85,30 @@ function seedReminderRulesIfEmpty_(ss) {
 function seedMailTemplatesIfEmpty_(ss) {
   var sheet = ss.getSheetByName(SHEETS.MAIL_TEMPLATES);
   if (sheet.getLastRow() > 1) return;
+  sheet.getRange(2, 1, defaultMailTemplateRows_().length, headers_(SHEETS.MAIL_TEMPLATES).length).setValues(defaultMailTemplateRows_());
+}
 
+/**
+ * 補上新版才有的雙語範本（TPL_REMINDER_ZH/EN、TPL_OVERDUE_ZH/EN、TPL_COMPLETION_ZH/EN），
+ * 只新增「目前分頁裡還沒有的 TemplateId」，不會動到已存在的資料。
+ * 適用情境：這個活頁簿是舊版 setupSpreadsheet() 建立的，MailTemplates 分頁已經有資料，
+ * 所以 seedMailTemplatesIfEmpty_ 不會自動補新範本——在 Apps Script 編輯器手動執行這個函式一次即可。
+ * 執行完可以自行刪掉分頁裡舊的 TPL_REMINDER／TPL_OVERDUE／TPL_COMPLETION（沒有語言後綴的）三列，
+ * 現在程式碼已經不會再用到它們了。
+ */
+function upgradeMailTemplatesToBilingual() {
+  var ss = getOrCreateBoundSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEETS.MAIL_TEMPLATES);
+  var existingIds = getAllRows_(SHEETS.MAIL_TEMPLATES).map(function (r) { return r.TemplateId; });
+  var missing = defaultMailTemplateRows_().filter(function (row) { return existingIds.indexOf(row[0]) === -1; });
+  if (!missing.length) { Logger.log('沒有缺少的範本，不需要新增。'); return; }
+  sheet.getRange(sheet.getLastRow() + 1, 1, missing.length, missing[0].length).setValues(missing);
+  Logger.log('已新增 ' + missing.length + ' 個範本：' + missing.map(function (r) { return r[0]; }).join('、'));
+}
+
+function defaultMailTemplateRows_() {
   var now = new Date();
-  var rows = [
+  return [
     ['TPL_INVITE_ZH', '邀請函（中文）', 'Invitation', 'zh',
       '【{{活動名稱}}】敬邀 {{講者稱謂}} 撥冗出席',
       '<p>{{講者稱謂}} 您好，</p><p>誠摯邀請您出席「{{活動名稱}}」（{{活動日期}}），請透過以下專屬連結確認出席並填寫相關資料：</p><p><a href="{{填寫連結}}">{{填寫連結}}</a></p><p>如有任何問題，請聯繫 {{專案窗口姓名}}（{{窗口電話}}）。</p>',
@@ -125,5 +146,4 @@ function seedMailTemplatesIfEmpty_(ss) {
       '<p>Dear {{SpeakerTitle}},</p><p>All your materials have been received. Thank you for your cooperation! If anything changes, you can still update it via your original link.</p>',
       'system', now]
   ];
-  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
 }

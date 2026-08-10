@@ -54,6 +54,7 @@ Google Sheets + Google Apps Script + GitHub 版本控管。對應〈講者協作
    - `setupSpreadsheet` — 建立所有分頁與標題列、預設提醒規則與雙語範本
    - `bootstrapFirstAdmin` — 把你自己的 Google 帳號加入 `Users` 分頁、角色設為 `SystemAdmin`
    - `installDailyReminderTrigger` — 安裝每天 08:00 的提醒排程（只需執行一次）
+   - 如果 `MailTemplates` 分頁在升級前就已經有資料（`setupSpreadsheet` 不會覆蓋既有資料），額外跑一次 `upgradeMailTemplatesToBilingual` 把提醒/逾期/結案信的英文版補進去（只新增缺少的，不會動到你已經改過的範本內容）
 5. **部署成 Web App**：Apps Script 編輯器右上角「部署」→「新增部署作業」→ 類型選「網頁應用程式」，執行身分選「我」，誰能存取選「知道連結的任何人」（講者端連結需要免登入存取）。
 6. 把部署網址填回 Script Properties 的 `WEBAPP_BASE_URL`（Apps Script 編輯器 → 專案設定 → 指令碼屬性），供系統產生講者連結使用。
 
