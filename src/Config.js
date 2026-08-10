@@ -48,9 +48,12 @@ SCHEMA[SHEETS.SPEAKERS] = [
 SCHEMA[SHEETS.ACTIVITY_SPEAKERS] = [
   'ActivitySpeakerId', 'ActivityId', 'SpeakerId', 'SessionId', 'Role',
   'InviteStatus', 'RiskLevel', 'OwnerUserId', 'InviteToken', 'TokenExpiresAt',
-  'CustomDeadlineOverrides', 'CreatedAt', 'UpdatedAt'
+  'CustomDeadlineOverrides', 'CreatedAt', 'UpdatedAt', 'ApplicableFields'
 ];
 // InviteStatus: 未聯絡 | 邀請中 | 已接受 | 已婉拒 | 待確認 | 已完成 | 高風險
+// ApplicableFields：JSON 陣列，例如 ["cv","photo"]。空值＝套用活動的全部資料需求（預設）；
+// 有值則只追蹤清單裡列出的欄位——因為同一場活動，每位講者要追蹤的項目不見得一樣
+//（例如在地講者不需要航班/接機，某些講者不需要簡報）。
 
 SCHEMA[SHEETS.DATA_REQUIREMENTS] = [
   'ReqId', 'ActivityId', 'FieldKey', 'LabelZh', 'LabelEn', 'FieldType',

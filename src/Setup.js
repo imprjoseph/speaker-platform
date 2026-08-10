@@ -58,6 +58,11 @@ function seedDefaultData_(ss) {
   seedMailTemplatesIfEmpty_(ss);
 }
 
+/**
+ * TemplateId 這裡存的是「範本類別」（TPL_REMINDER／TPL_OVERDUE），不是實際範本 ID——
+ * 實際寄送時會依講者語言自動接上 _ZH／_EN，見 MailService.js 的 resolveTemplateIdForSpeaker_。
+ * TPL_OVERDUE_ESCALATE 例外：那是寄給內部負責人的通知，固定中文，不用接語言後綴。
+ */
 function seedReminderRulesIfEmpty_(ss) {
   var sheet = ss.getSheetByName(SHEETS.REMINDER_RULES);
   if (sheet.getLastRow() > 1) return; // 已有資料就不覆蓋
@@ -72,6 +77,11 @@ function seedReminderRulesIfEmpty_(ss) {
   sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
 }
 
+/**
+ * 每一類信件都準備中／英文版本（除了「逾期升級通知」是寄給內部負責人，固定中文）。
+ * 實際寄送時依講者的 PreferredLanguage 自動選對應語言版本，
+ * 見 MailService.js 的 resolveTemplateIdForSpeaker_。
+ */
 function seedMailTemplatesIfEmpty_(ss) {
   var sheet = ss.getSheetByName(SHEETS.MAIL_TEMPLATES);
   if (sheet.getLastRow() > 1) return;
@@ -86,21 +96,33 @@ function seedMailTemplatesIfEmpty_(ss) {
       '[{{ActivityName}}] Speaker Invitation',
       '<p>Dear {{SpeakerTitle}},</p><p>We would be honored to have you speak at {{ActivityName}} ({{ActivityDate}}). Please confirm via your personal link:</p><p><a href="{{FormLink}}">{{FormLink}}</a></p><p>Questions? Contact {{ContactName}} ({{ContactPhone}}).</p>',
       'system', now],
-    ['TPL_REMINDER', '資料催收提醒', 'Reminder', 'zh',
+    ['TPL_REMINDER_ZH', '資料催收提醒（中文）', 'Reminder', 'zh',
       '【{{活動名稱}}】提醒尚有資料待補：{{尚缺項目}}',
       '<p>{{講者稱謂}} 您好，距離活動還有 {{剩餘天數}} 天，尚缺以下項目：{{尚缺項目}}，截止日為 {{截止日}}。請透過原連結補齊：<a href="{{填寫連結}}">{{填寫連結}}</a></p>',
       'system', now],
-    ['TPL_OVERDUE', '逾期提醒', 'Overdue', 'zh',
+    ['TPL_REMINDER_EN', 'Reminder (English)', 'Reminder', 'en',
+      '[{{ActivityName}}] Reminder: outstanding items - {{尚缺項目}}',
+      '<p>Dear {{SpeakerTitle}},</p><p>Just a friendly reminder that the following items are still outstanding: {{尚缺項目}} (due {{截止日}}). Please complete them via your personal link: <a href="{{FormLink}}">{{FormLink}}</a></p>',
+      'system', now],
+    ['TPL_OVERDUE_ZH', '逾期提醒（中文）', 'Overdue', 'zh',
       '【{{活動名稱}}】{{尚缺項目}} 已逾期，請儘速補件',
       '<p>{{講者稱謂}} 您好，以下項目已逾期：{{尚缺項目}}，敬請儘速透過連結補齊：<a href="{{填寫連結}}">{{填寫連結}}</a></p>',
       'system', now],
-    ['TPL_OVERDUE_ESCALATE', '逾期升級通知（給內部負責人）', 'Overdue', 'zh',
+    ['TPL_OVERDUE_EN', 'Overdue (English)', 'Overdue', 'en',
+      '[{{ActivityName}}] Overdue: {{尚缺項目}}',
+      '<p>Dear {{SpeakerTitle}},</p><p>The following items are now overdue: {{尚缺項目}}. Please complete them as soon as possible via: <a href="{{FormLink}}">{{FormLink}}</a></p>',
+      'system', now],
+    ['TPL_OVERDUE_ESCALATE', '逾期升級通知（給內部負責人，固定中文）', 'Overdue', 'zh',
       '【內部通知】{{講者稱謂}}（{{活動名稱}}）逾期 3 天以上，建議改人工聯繫',
       '<p>講者 {{講者稱謂}} 尚缺 {{尚缺項目}}，已逾期超過 3 天，系統將暫停自動催收，請改以人工聯繫。</p>',
       'system', now],
-    ['TPL_COMPLETION', '完成確認信', 'Completion', 'zh',
+    ['TPL_COMPLETION_ZH', '完成確認信（中文）', 'Completion', 'zh',
       '【{{活動名稱}}】資料已收齊，感謝您的配合',
       '<p>{{講者稱謂}} 您好，您所提供的資料已全數收齊，感謝配合！如有異動請隨時透過原連結更新。</p>',
+      'system', now],
+    ['TPL_COMPLETION_EN', 'Completion (English)', 'Completion', 'en',
+      '[{{ActivityName}}] All set — thank you!',
+      '<p>Dear {{SpeakerTitle}},</p><p>All your materials have been received. Thank you for your cooperation! If anything changes, you can still update it via your original link.</p>',
       'system', now]
   ];
   sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);

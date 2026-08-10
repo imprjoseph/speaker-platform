@@ -70,14 +70,13 @@ function composeMail(activityId, activitySpeakerId, templateId, extraVariables, 
   var variables = Object.assign(buildMailVariables_(activityId, activitySpeakerId, missing), extraVariables || {});
   var rendered = renderTemplate_(templateId, variables);
 
-  var recipientEmail = missing.escalateToLead ? '' : speaker.Email;
   var queueRow = insertRow_(SHEETS.MAIL_QUEUE, {
     QueueId: newId_('MAIL'),
     ActivityId: activityId,
     ActivitySpeakerId: activitySpeakerId,
     TemplateId: templateId,
     Language: rendered.language,
-    ToEmail: (extraVariables && extraVariables.__toEmail) || recipientEmail,
+    ToEmail: (extraVariables && extraVariables.__toEmail) || speaker.Email,
     CcEmails: (extraVariables && extraVariables.__cc) || (speaker.AssistantEmail || ''),
     BccEmails: (extraVariables && extraVariables.__bcc) || '',
     ReplyTo: (extraVariables && extraVariables.__replyTo) || '',
@@ -93,8 +92,7 @@ function composeMail(activityId, activitySpeakerId, templateId, extraVariables, 
 }
 
 function getMissingRequiredItems_(activitySpeakerId) {
-  var link = findOneBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
-  var reqs = listDataRequirements(link.ActivityId).filter(function (r) { return r.Required; });
+  var reqs = getApplicableRequirements_(activitySpeakerId).filter(function (r) { return r.Required; });
   return reqs
     .map(function (r) {
       return { fieldKey: r.FieldKey, label: r.LabelZh, deadline: formatDate_(resolveFieldDeadline(activitySpeakerId, r.FieldKey)) };
@@ -174,11 +172,19 @@ function cancelPendingMailForActivitySpeaker_(activitySpeakerId) {
 }
 
 function maybeStopRemindersIfComplete_(activitySpeakerId) {
+  var link = findOneBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
+  var wasAlreadyComplete = link.InviteStatus === STATUS.INVITE.COMPLETED;
+
   if (isActivitySpeakerComplete_(activitySpeakerId)) {
     cancelPendingMailForActivitySpeaker_(activitySpeakerId);
     updateRowByKey_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId, {
       InviteStatus: STATUS.INVITE.COMPLETED, UpdatedAt: nowIso_()
     });
+    if (!wasAlreadyComplete) {
+      var speaker = getSpeaker(link.SpeakerId);
+      var templateId = resolveTemplateIdForSpeaker_('TPL_COMPLETION', speaker);
+      composeMail(link.ActivityId, activitySpeakerId, templateId, {}, 'system-reminder');
+    }
   }
 }
 
@@ -205,17 +211,26 @@ function runDailyReminderSweep() {
 
       var rule = pickReminderRule_(activity.ActivityId, diffDays, daysOverdue);
       if (!rule) return;
-      if (alreadyQueuedToday_(link.ActivitySpeakerId, rule.TemplateId)) return;
 
       var isEscalation = rule.TemplateId === 'TPL_OVERDUE_ESCALATE';
+      var speaker = getSpeaker(link.SpeakerId);
+      var templateId = resolveTemplateIdForSpeaker_(rule.TemplateId, speaker);
+      if (alreadyQueuedToday_(link.ActivitySpeakerId, templateId)) return;
+
       var extra = isEscalation ? { __toEmail: getOwnerEmail_(link.OwnerUserId), __cc: '' } : {};
-      composeMail(activity.ActivityId, link.ActivitySpeakerId, rule.TemplateId, extra, 'system-reminder');
+      composeMail(activity.ActivityId, link.ActivitySpeakerId, templateId, extra, 'system-reminder');
       created++;
     });
   });
 
   Logger.log('runDailyReminderSweep: 產生 ' + created + ' 封待審信件（尚未寄出，待窗口確認）。');
   return created;
+}
+
+/** 依講者的 PreferredLanguage 把範本類別（TPL_REMINDER／TPL_OVERDUE）接上 _ZH／_EN。 */
+function resolveTemplateIdForSpeaker_(templateCategory, speaker) {
+  if (templateCategory === 'TPL_OVERDUE_ESCALATE') return templateCategory; // 內部通知固定中文
+  return templateCategory + '_' + (speaker.PreferredLanguage === 'en' ? 'EN' : 'ZH');
 }
 
 function pickReminderRule_(activityId, diffDays, daysOverdue) {

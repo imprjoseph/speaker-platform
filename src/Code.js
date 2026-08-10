@@ -81,6 +81,7 @@ var API_WHITELIST_ = {
   updateSpeaker: api_updateSpeaker,
   removeSpeakerFromActivity: api_removeSpeakerFromActivity,
   getSpeakerDetail: api_getSpeakerDetail,
+  setSpeakerApplicableFields: api_setSpeakerApplicableFields,
   getDashboard: api_getDashboard,
   getTaskBoard: api_getTaskBoard,
   composeInviteMail: api_composeInviteMail,

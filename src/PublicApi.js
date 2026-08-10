@@ -8,7 +8,7 @@ function getSpeakerFormData(token) {
 
   var activity = getActivity(link.ActivityId);
   var speaker = getSpeaker(link.SpeakerId);
-  var reqs = listDataRequirements(link.ActivityId);
+  var reqs = getApplicableRequirements_(link.ActivitySpeakerId);
   var responses = getResponses(link.ActivitySpeakerId);
 
   var fields = reqs.map(function (req) {

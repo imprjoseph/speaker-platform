@@ -45,13 +45,13 @@ function hasSentInviteOrReminder_(activitySpeakerId) {
     .some(function (m) { return m.Status === STATUS.MAIL.SENT; });
 }
 
-/** 整場活動的逐項狀態總表（給儀表板與匯出使用）。 */
+/** 整場活動的逐項狀態總表（給儀表板與匯出使用）。每位講者的追蹤項目可能不同，見 getApplicableRequirements_。 */
 function getActivityTaskBoard(activityId) {
   var links = findRowsBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivityId', activityId);
-  var reqs = listDataRequirements(activityId);
 
   return links.map(function (link) {
     var speaker = getSpeaker(link.SpeakerId);
+    var reqs = getApplicableRequirements_(link.ActivitySpeakerId);
     var items = reqs.map(function (req) {
       return {
         fieldKey: req.FieldKey,

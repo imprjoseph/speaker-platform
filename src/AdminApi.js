@@ -31,9 +31,12 @@ function api_listDataRequirements(activityId) {
   return listDataRequirements(activityId);
 }
 
-function api_addSpeaker(activityId, speakerInput, linkOpts) {
+function api_addSpeaker(activityId, speakerInput, linkOpts, applicableFieldKeys) {
   var created = createSpeaker(speakerInput, currentUserEmail_());
   var link = addSpeakerToActivity(activityId, created.speaker.SpeakerId, linkOpts, currentUserEmail_());
+  if (applicableFieldKeys) {
+    link = setSpeakerApplicableFields(link.ActivitySpeakerId, applicableFieldKeys, currentUserEmail_());
+  }
   return { speaker: created.speaker, link: link, duplicateWarning: created.duplicateWarning };
 }
 
@@ -120,7 +123,13 @@ function api_removeSpeakerFromActivity(activitySpeakerId) {
 
 function api_getSpeakerDetail(activitySpeakerId) {
   var link = findOneBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
-  return { link: link, speaker: getSpeaker(link.SpeakerId) };
+  var applicableFieldKeys = getApplicableRequirements_(activitySpeakerId).map(function (r) { return r.FieldKey; });
+  return { link: link, speaker: getSpeaker(link.SpeakerId), applicableFieldKeys: applicableFieldKeys };
+}
+
+/** 設定這位講者實際要追蹤的項目；傳全部欄位或空陣列都等於恢復成「套用活動全部項目」。 */
+function api_setSpeakerApplicableFields(activitySpeakerId, fieldKeys) {
+  return setSpeakerApplicableFields(activitySpeakerId, fieldKeys, currentUserEmail_());
 }
 
 // ---- 常用欄位快速設定 ----

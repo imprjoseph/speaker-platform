@@ -37,6 +37,30 @@ function listDataRequirements(activityId) {
     .sort(function (a, b) { return a.DisplayOrder - b.DisplayOrder; });
 }
 
+/**
+ * 同一場活動的每位講者，要追蹤的項目不見得一樣（例如在地講者不需要航班/接機）。
+ * 這裡回傳「這位講者實際適用」的資料需求清單：預設套用活動的全部設定，
+ * 若該講者有另外指定 ApplicableFields，則只回傳清單裡列出的欄位。
+ */
+function getApplicableRequirements_(activitySpeakerId) {
+  var link = findOneBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
+  if (!link) throw new Error('找不到講者活動關聯：' + activitySpeakerId);
+  var all = listDataRequirements(link.ActivityId);
+  var applicable = link.ApplicableFields ? JSON.parse(link.ApplicableFields) : null;
+  if (!applicable) return all; // 沒有特別設定 = 套用活動全部項目
+  return all.filter(function (r) { return applicable.indexOf(r.FieldKey) !== -1; });
+}
+
+/** 設定／調整某位講者要追蹤的項目（傳空陣列或不傳等於恢復成「套用活動全部項目」）。 */
+function setSpeakerApplicableFields(activitySpeakerId, fieldKeys, actorEmail) {
+  var value = (fieldKeys && fieldKeys.length) ? JSON.stringify(fieldKeys) : '';
+  var updated = updateRowByKey_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId, {
+    ApplicableFields: value, UpdatedAt: nowIso_()
+  });
+  writeAudit_(actorEmail, 'SET_APPLICABLE_FIELDS', SHEETS.ACTIVITY_SPEAKERS, activitySpeakerId, value || '(恢復預設：套用活動全部項目)');
+  return updated;
+}
+
 /** 依活動預設期限 + 個別例外，計算某講者、某欄位的實際截止日（規劃書關鍵決策 2）。 */
 function resolveFieldDeadline(activitySpeakerId, fieldKey) {
   var link = findOneBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
@@ -120,8 +144,7 @@ function reviewResponse(responseId, decision, note, newDeadline, actorEmail) {
 
 /** 講者整體是否已收齊所有必填項目 —— 決定是否顯示為「已完成」並停止催收。 */
 function isActivitySpeakerComplete_(activitySpeakerId) {
-  var link = findOneBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
-  var requiredFields = listDataRequirements(link.ActivityId).filter(function (r) { return r.Required; });
+  var requiredFields = getApplicableRequirements_(activitySpeakerId).filter(function (r) { return r.Required; });
   var responses = getResponses(activitySpeakerId);
   return requiredFields.every(function (req) {
     var resp = responses.filter(function (r) { return r.FieldKey === req.FieldKey; })[0];

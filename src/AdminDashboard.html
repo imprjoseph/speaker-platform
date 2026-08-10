@@ -96,6 +96,8 @@
           <select id="s_lang"><option value="zh">中文</option><option value="en">English</option></select>
           <button class="action" id="speakerSubmitBtn" onclick="submitSpeaker(this)">加入並產生邀請連結</button>
         </div>
+        <p class="hint">這位講者要追蹤的項目（同一場活動的講者不用追蹤一樣的東西，例如在地講者可以不勾航班/接機）：</p>
+        <div class="checklist" id="speakerFieldsChecklist"></div>
       </div>
 
       <div class="card">
@@ -224,7 +226,9 @@
     var currentActivityId = null;
     var editingActivityId = null;
     var editingSpeakerId = null;
+    var editingActivitySpeakerId = null; // 講者主檔 ID 跟「這位講者在這場活動的關聯 ID」不一樣，追蹤項目要用後者
     var standardFields = [];
+    var activityRequirements = []; // 目前活動已設定的資料需求，用來畫「這位講者要追蹤的項目」checklist
 
     /**
      * 防止重複送出：呼叫期間鎖住按鈕並顯示「處理中…」，避免使用者以為畫面卡住而連續點擊
@@ -411,13 +415,30 @@
     function loadDataRequirements() {
       if (!currentActivityId) return;
       google.script.run.withFailureHandler(alertErr).withSuccessHandler(wrap(function (reqs) {
+        activityRequirements = reqs;
         var box = document.getElementById('currentRequirementsList');
         box.textContent = reqs.length ? ('已設定：' + reqs.map(function (r) { return r.LabelZh; }).join('、')) : '這場活動尚未設定任何資料需求。';
         standardFields.forEach(function (f) {
           var el = document.getElementById('std_' + f.fieldKey);
           if (el) el.checked = reqs.some(function (r) { return r.FieldKey === f.fieldKey; });
         });
+        if (!editingActivitySpeakerId) renderSpeakerFieldsChecklist(); // 編輯中的話交給 startEditSpeaker 自己畫，避免蓋掉使用者正在調整的勾選
       })).api_listDataRequirements(currentActivityId);
+    }
+
+    /** checkedKeys 不傳＝全部勾選（新增講者的預設狀態＝套用活動全部項目）。 */
+    function renderSpeakerFieldsChecklist(checkedKeys) {
+      var box = document.getElementById('speakerFieldsChecklist');
+      if (!activityRequirements.length) { box.innerHTML = '<span class="hint">（這場活動尚未設定資料需求，請先在上方「資料需求設定」套用項目）</span>'; return; }
+      box.innerHTML = activityRequirements.map(function (r) {
+        var checked = checkedKeys ? checkedKeys.indexOf(r.FieldKey) !== -1 : true;
+        return '<label><input type="checkbox" value="' + r.FieldKey + '" id="spkfld_' + r.FieldKey + '"' + (checked ? ' checked' : '') + '>' + r.LabelZh + '</label>';
+      }).join('');
+    }
+
+    function getCheckedSpeakerFields_() {
+      return activityRequirements.map(function (r) { return r.FieldKey; })
+        .filter(function (key) { var el = document.getElementById('spkfld_' + key); return el && el.checked; });
     }
 
     function applyStandardFields(btn) {
@@ -444,10 +465,16 @@
       };
       if (!speakerInput.nameZh) { alert('請輸入姓名'); return; }
 
+      var checkedFields = getCheckedSpeakerFields_();
+
       withBusy(btn, function (done) {
         if (editingSpeakerId) {
           google.script.run
-            .withSuccessHandler(wrap(function () { done(); cancelEditSpeaker(); loadBoard(); }))
+            .withSuccessHandler(wrap(function () {
+              var asId = editingActivitySpeakerId;
+              google.script.run.withFailureHandler(alertErr).api_setSpeakerApplicableFields(asId, checkedFields);
+              done(); cancelEditSpeaker(); loadBoard();
+            }))
             .withFailureHandler(function (err) { done(); alertErr(err); })
             .api_updateSpeaker(editingSpeakerId, {
               NameZh: speakerInput.nameZh, Email: speakerInput.email, Title: speakerInput.title,
@@ -457,7 +484,7 @@
           google.script.run
             .withSuccessHandler(wrap(function (res) { done(); if (res.duplicateWarning) alert(res.duplicateWarning); clearSpeakerForm_(); loadBoard(); }))
             .withFailureHandler(function (err) { done(); alertErr(err); })
-            .api_addSpeaker(currentActivityId, speakerInput, {});
+            .api_addSpeaker(currentActivityId, speakerInput, {}, checkedFields);
         }
       });
     }
@@ -468,11 +495,13 @@
       document.getElementById('s_title').value = '';
       document.getElementById('s_org').value = '';
       document.getElementById('s_lang').value = 'zh';
+      renderSpeakerFieldsChecklist();
     }
 
     function startEditSpeaker(activitySpeakerId) {
       google.script.run.withSuccessHandler(wrap(function (detail) {
         editingSpeakerId = detail.speaker.SpeakerId;
+        editingActivitySpeakerId = activitySpeakerId;
         document.getElementById('s_nameZh').value = detail.speaker.NameZh;
         document.getElementById('s_email').value = detail.speaker.Email;
         document.getElementById('s_title').value = detail.speaker.Title;
@@ -481,12 +510,14 @@
         document.getElementById('speakerFormTitle').textContent = '編輯講者';
         document.getElementById('speakerSubmitBtn').textContent = '更新講者';
         document.getElementById('speakerEditingFlag').style.display = 'block';
+        renderSpeakerFieldsChecklist(detail.applicableFieldKeys);
         window.scrollTo(0, document.getElementById('speakerFormTitle').offsetTop);
       })).withFailureHandler(alertErr).api_getSpeakerDetail(activitySpeakerId);
     }
 
     function cancelEditSpeaker() {
       editingSpeakerId = null;
+      editingActivitySpeakerId = null;
       clearSpeakerForm_();
       document.getElementById('speakerFormTitle').textContent = '新增講者';
       document.getElementById('speakerSubmitBtn').textContent = '加入並產生邀請連結';

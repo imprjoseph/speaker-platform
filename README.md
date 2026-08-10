@@ -9,10 +9,10 @@ Google Sheets + Google Apps Script + GitHub 版本控管。對應〈講者協作
 | 1. 活動工作區 | 建立 / 列表 / 複製 / 封存（`ActivityService.js`） |
 | 2. 講者主檔 | 建立 / 重複偵測 / 歷史活動（`SpeakerService.js`） |
 | 3. 邀請與回覆 | 免登入專屬連結、接受／婉拒、可撤銷重發（`InvitationService.js`） |
-| 4. 彈性資料表單 | 每活動自訂欄位、必填、期限（`FormService.js`） |
+| 4. 彈性資料表單 | 每活動自訂欄位、必填、期限，**且同一活動下每位講者可追蹤不同項目**（`FormService.js`） |
 | 5. 檔案蒐集 | 上傳、版本、審核、最終版鎖定（`FileService.js`） |
 | 6. 任務與期限 | 8 段狀態機（未寄送～逾期）（`TaskService.js`） |
-| 7. 郵件與提醒 | **多語系範本、發送前一律待窗口確認才寄出**、D-14/7/3/逾期/升級、已提供則不提醒（`MailService.js`） |
+| 7. 郵件與提醒 | **每一類信件都有中英文版、依講者語言自動選版本**、發送前一律待窗口確認才寄出、D-14/7/3/逾期/升級、已提供則不提醒、全部完成自動排入結案信（`MailService.js`） |
 | 11. 儀表板與統計 | 完成率、逾期、高風險、依負責人彙總（`DashboardService.js`） |
 | 12. 匯出 | 講者總表／缺件表匯出成 Google Sheet（`ExportService.js`） |
 | 15. 安全與稽核（基礎） | 角色欄位、操作稽核紀錄（`SecurityService.js`） |
