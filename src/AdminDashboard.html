@@ -469,11 +469,15 @@
 
       withBusy(btn, function (done) {
         if (editingSpeakerId) {
+          var asId = editingActivitySpeakerId;
           google.script.run
             .withSuccessHandler(wrap(function () {
-              var asId = editingActivitySpeakerId;
-              google.script.run.withFailureHandler(alertErr).api_setSpeakerApplicableFields(asId, checkedFields);
-              done(); cancelEditSpeaker(); loadBoard();
+              // 一定要等這通「儲存追蹤項目」的呼叫真的完成，才能重新整理畫面／關閉編輯模式，
+              // 不然畫面會在資料庫還沒更新前就重新讀取，看起來像是「改了沒生效」。
+              google.script.run
+                .withSuccessHandler(wrap(function () { done(); cancelEditSpeaker(); loadBoard(); }))
+                .withFailureHandler(function (err) { done(); alertErr(err); })
+                .api_setSpeakerApplicableFields(asId, checkedFields);
             }))
             .withFailureHandler(function (err) { done(); alertErr(err); })
             .api_updateSpeaker(editingSpeakerId, {
