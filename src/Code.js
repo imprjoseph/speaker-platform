@@ -75,7 +75,7 @@ var API_WHITELIST_ = {
   archiveActivity: api_archiveActivity,
   deleteActivity: api_deleteActivity,
   listStandardFields: api_listStandardFields,
-  addStandardFields: api_addStandardFields,
+  syncStandardFields: api_syncStandardFields,
   listDataRequirements: api_listDataRequirements,
   addSpeaker: api_addSpeaker,
   updateSpeaker: api_updateSpeaker,

@@ -32,6 +32,35 @@ function addStandardFields(activityId, fieldKeys, actorEmail) {
   return added;
 }
 
+function removeDataRequirement(activityId, fieldKey, actorEmail) {
+  var req = findRowsBy_(SHEETS.DATA_REQUIREMENTS, 'ActivityId', activityId)
+    .filter(function (r) { return r.FieldKey === fieldKey; })[0];
+  if (!req) return false;
+  deleteRowByKey_(SHEETS.DATA_REQUIREMENTS, 'ReqId', req.ReqId);
+  writeAudit_(actorEmail, 'REMOVE_DATA_REQUIREMENT', SHEETS.DATA_REQUIREMENTS, req.ReqId, fieldKey);
+  return true;
+}
+
+/**
+ * 「資料需求設定」checklist 按下「套用勾選項目」時真正要做的事：
+ * 勾了但活動還沒有的常用欄位 -> 新增；活動已有但現在被取消勾選的常用欄位 -> 移除。
+ * 只動 STANDARD_FIELDS 涵蓋的 7 種常用欄位，不會動到未來可能手動加的自訂欄位。
+ */
+function syncStandardFields(activityId, checkedFieldKeys, actorEmail) {
+  var standardKeys = STANDARD_FIELDS.map(function (f) { return f.fieldKey; });
+  var existingStandardKeys = listDataRequirements(activityId)
+    .filter(function (r) { return standardKeys.indexOf(r.FieldKey) !== -1; })
+    .map(function (r) { return r.FieldKey; });
+
+  var toAdd = checkedFieldKeys.filter(function (k) { return existingStandardKeys.indexOf(k) === -1; });
+  var toRemove = existingStandardKeys.filter(function (k) { return checkedFieldKeys.indexOf(k) === -1; });
+
+  var added = addStandardFields(activityId, toAdd, actorEmail);
+  toRemove.forEach(function (key) { removeDataRequirement(activityId, key, actorEmail); });
+
+  return { added: added.map(function (r) { return r.FieldKey; }), removed: toRemove };
+}
+
 function listDataRequirements(activityId) {
   return findRowsBy_(SHEETS.DATA_REQUIREMENTS, 'ActivityId', activityId)
     .sort(function (a, b) { return a.DisplayOrder - b.DisplayOrder; });
@@ -41,11 +70,14 @@ function listDataRequirements(activityId) {
  * 同一場活動的每位講者，要追蹤的項目不見得一樣（例如在地講者不需要航班/接機）。
  * 這裡回傳「這位講者實際適用」的資料需求清單：預設套用活動的全部設定，
  * 若該講者有另外指定 ApplicableFields，則只回傳清單裡列出的欄位。
+ *
+ * precomputedAllRequirements（選填）：像 getActivityTaskBoard 這種「同一活動、迴圈跑過每位講者」
+ * 的情境，活動的需求清單其實每次都一樣，傳進來可以省掉重複整張表查詢。
  */
-function getApplicableRequirements_(activitySpeakerId) {
+function getApplicableRequirements_(activitySpeakerId, precomputedAllRequirements) {
   var link = findOneBy_(SHEETS.ACTIVITY_SPEAKERS, 'ActivitySpeakerId', activitySpeakerId);
   if (!link) throw new Error('找不到講者活動關聯：' + activitySpeakerId);
-  var all = listDataRequirements(link.ActivityId);
+  var all = precomputedAllRequirements || listDataRequirements(link.ActivityId);
   var applicable = link.ApplicableFields ? JSON.parse(link.ApplicableFields) : null;
   if (!applicable) return all; // 沒有特別設定 = 套用活動全部項目
   return all.filter(function (r) { return applicable.indexOf(r.FieldKey) !== -1; });

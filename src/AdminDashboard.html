@@ -445,12 +445,15 @@
       if (!currentActivityId) { alert('請先選擇活動'); return; }
       var checked = standardFields.map(function (f) { return f.fieldKey; })
         .filter(function (key) { return document.getElementById('std_' + key).checked; });
-      if (!checked.length) { alert('請至少勾選一項'); return; }
+      // 沒勾的項目如果活動已經有設定，這裡會一併移除，所以「一項都不勾」是合法操作（=全部移除）。
       withBusy(btn, function (done) {
         google.script.run
-          .withSuccessHandler(wrap(function () { done(); loadDataRequirements(); loadBoard(); }))
+          .withSuccessHandler(wrap(function (result) {
+            done(); loadDataRequirements(); loadBoard();
+            if (result.removed.length) alert('已移除：' + result.removed.join('、'));
+          }))
           .withFailureHandler(function (err) { done(); alertErr(err); })
-          .api_addStandardFields(currentActivityId, checked);
+          .api_syncStandardFields(currentActivityId, checked);
       });
     }
 

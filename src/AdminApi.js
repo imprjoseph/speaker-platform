@@ -138,8 +138,9 @@ function api_listStandardFields() {
   return STANDARD_FIELDS;
 }
 
-function api_addStandardFields(activityId, fieldKeys) {
-  return addStandardFields(activityId, fieldKeys, currentUserEmail_());
+/** 「套用勾選項目」按鈕真正呼叫的函式：勾了就加、沒勾但活動已有的常用欄位就移除。 */
+function api_syncStandardFields(activityId, fieldKeys) {
+  return syncStandardFields(activityId, fieldKeys, currentUserEmail_());
 }
 
 // ---- 批次匯入講者 ----
